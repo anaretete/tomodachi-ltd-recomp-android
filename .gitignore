@@ -1,0 +1,30 @@
+# ==============================================================================
+# .gitignore
+# ==============================================================================
+
+# Android build artifacts
+.gradle/
+build/
+android/build/
+android/app/build/
+android/app/.cxx/
+android/.gradle/
+local.properties
+
+# Native CMake build artifacts
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+*.o
+*.so
+*.a
+*.apk
+*.aab
+
+# IDE & OS
+.idea/
+*.iml
+.DS_Store
+*.swp
+*~

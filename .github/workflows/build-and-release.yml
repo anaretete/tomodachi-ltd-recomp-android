@@ -1,0 +1,94 @@
+name: Build Android APK & Publish Release
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Native arm64-v8a APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Android NDK & SDK
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r26b
+          add-to-path: true
+
+      - name: Set up CMake
+        uses: jwlawson/actions-setup-cmake@v2
+        with:
+          cmake-version: '3.22.1'
+
+      - name: Grant execute permissions for Gradle
+        run: |
+          cd android
+          chmod +x gradlew || true
+
+      - name: Build Android Release APK with Gradle
+        run: |
+          cd android
+          ./gradlew assembleRelease --stacktrace
+
+      - name: Locate and Stage APK
+        id: stage_apk
+        run: |
+          mkdir -p artifacts
+          APK_PATH=$(find android/app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          if [ -z "$APK_PATH" ]; then
+            APK_PATH=$(find android/app/build/outputs/apk -name "*.apk" | head -n 1)
+          fi
+          echo "Found APK at: $APK_PATH"
+          cp "$APK_PATH" artifacts/tomodachi-ltd-recomp-arm64.apk
+          echo "apk_path=artifacts/tomodachi-ltd-recomp-arm64.apk" >> $GITHUB_OUTPUT
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tomodachi-ltd-recomp-arm64
+          path: artifacts/tomodachi-ltd-recomp-arm64.apk
+
+      - name: Create GitHub Release & Publish APK
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event_name == 'workflow_dispatch'
+        with:
+          tag_name: v1.0.0
+          name: "Tomodachi Life Recomp Android v1.0.0"
+          body: |
+            ### Native Android Port for `tomodachi-ltd-recomp`
+            
+            **Release Highlights:**
+            - Native 64-bit ARM (`arm64-v8a`) executable linked against Vulkan 1.1+ and SDL3.
+            - Full Android NativeActivity lifecycle integration with `ANativeWindow` swapchain handling.
+            - Low-latency on-screen virtual touchscreen controller overlay (Left Stick, D-Pad, A/B/X/Y, Shoulders, System buttons, and capacitive touch pass-through).
+            - Android storage virtualization and RomFS verification with automatic missing-asset notification dialog.
+            
+            #### Instructions:
+            1. Download and install `tomodachi-ltd-recomp-arm64.apk`.
+            2. Dump your Switch game `romfs` folder.
+            3. Copy the extracted `romfs` folder to:
+               `/sdcard/Android/data/com.recomp.tomodachiltd/files/romfs`
+            4. Launch the application!
+          draft: false
+          prerelease: false
+          files: artifacts/tomodachi-ltd-recomp-arm64.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
