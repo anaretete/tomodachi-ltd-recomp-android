@@ -6,6 +6,7 @@
 #include <android_native_app_glue.h>
 #include <android/log.h>
 #include <android/native_window.h>
+#include <android/window.h>
 #include <vulkan/vulkan.h>
 #include <unistd.h>
 #include <chrono>
@@ -41,6 +42,9 @@ static void app_handle_cmd(struct android_app* app, int32_t cmd) {
         case APP_CMD_INIT_WINDOW: {
             LOGI("Lifecycle: APP_CMD_INIT_WINDOW received.");
             if (app->window != nullptr) {
+                // Prevent screen from sleeping while in game
+                ANativeActivity_setWindowFlags(app->activity, AWINDOW_FLAG_KEEP_SCREEN_ON, 0);
+
                 // Configure native buffer geometry for high-performance 32-bit presentation
                 ANativeWindow_setBuffersGeometry(
                     app->window,
