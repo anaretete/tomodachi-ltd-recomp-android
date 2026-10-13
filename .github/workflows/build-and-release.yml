@@ -38,14 +38,14 @@ jobs:
         with:
           cmake-version: '3.22.1'
 
-      - name: Grant execute permissions for Gradle
-        run: |
-          cd android
-          chmod +x gradlew || true
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
 
       - name: Build Android Release APK with Gradle
         run: |
           cd android
+          gradle wrapper
+          chmod +x gradlew
           ./gradlew assembleRelease --stacktrace
 
       - name: Locate and Stage APK

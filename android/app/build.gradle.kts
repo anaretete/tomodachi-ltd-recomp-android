@@ -10,7 +10,7 @@ plugins {
 android {
     namespace = "com.recomp.tomodachiltd"
     compileSdk = 34
-    ndkVersion = "26.2.11394342" // NDK r26b+ LTS
+    // ndkVersion will auto-detect from ANDROID_NDK_HOME or setup-ndk
 
     defaultConfig {
         applicationId = "com.recomp.tomodachiltd"
