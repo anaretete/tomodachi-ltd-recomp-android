@@ -9,7 +9,12 @@
 #include <android/window.h>
 #include <vulkan/vulkan.h>
 #include <EGL/egl.h>
+#include <EGL/eglext.h>
 #include <GLES3/gl3.h>
+
+#ifndef EGL_OPENGL_ES3_BIT_KHR
+#define EGL_OPENGL_ES3_BIT_KHR 0x00000040
+#endif
 #include <unistd.h>
 #include <chrono>
 #include <thread>
@@ -351,7 +356,7 @@ void android_main(struct android_app* app) {
             if (app->destroyRequested != 0) {
                 LOGI("Destroy requested by Android. Exiting native loop.");
                 if (ctx.backend == RenderBackend::Vulkan) {
-                    if (ctx->vk_device != VK_NULL_HANDLE) {
+                    if (ctx.vk_device != VK_NULL_HANDLE) {
                         vkDeviceWaitIdle(ctx.vk_device);
                         Tomodachi::Platform::AndroidVulkanBridge::Instance().DestroySwapchain(ctx.vk_device);
                         vkDestroyDevice(ctx.vk_device, nullptr);
