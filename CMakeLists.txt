@@ -50,17 +50,25 @@ if(ANDROID)
         set(SDL3_TARGET SDL3-static)
     endif()
 
+    # Locate native_app_glue source from Android NDK
+    set(NATIVE_APP_GLUE_SRC "")
+    if(EXISTS "${ANDROID_NDK}/sources/android/native_app_glue/android_native_app_glue.c")
+        set(NATIVE_APP_GLUE_SRC "${ANDROID_NDK}/sources/android/native_app_glue/android_native_app_glue.c")
+    endif()
+
     # Shared Library target for Android NativeActivity
     # Must match android.app.lib_name declared in AndroidManifest.xml
     add_library(tomodachi_app SHARED
         ${TOMODACHI_COMMON_SOURCES}
         android/app/src/main/cpp/android_main.cpp
+        ${NATIVE_APP_GLUE_SRC}
     )
 
     target_include_directories(tomodachi_app PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
         ${CMAKE_CURRENT_SOURCE_DIR}/src/platform
         ${CMAKE_CURRENT_SOURCE_DIR}/src/input
+        ${ANDROID_NDK}/sources/android/native_app_glue
     )
 
     target_link_libraries(tomodachi_app PRIVATE
@@ -68,10 +76,10 @@ if(ANDROID)
         ${SDL3_TARGET}
     )
 
-    # Export JNI and native entry symbols
+    # Export JNI and native entry symbols with 16KB page alignment support
     set_target_properties(tomodachi_app PROPERTIES
         OUTPUT_NAME "tomodachi_app"
-        LINK_FLAGS "-Wl,--no-undefined -Wl,-z,max-page-size=16384"
+        LINK_FLAGS "-Wl,--no-undefined -Wl,-z,max-page-size=16384 -Wl,-u,ANativeActivity_onCreate"
     )
 
 else()

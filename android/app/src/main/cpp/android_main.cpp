@@ -238,7 +238,15 @@ void android_main(struct android_app* app) {
     }
 
     // 3. Initialize Vulkan Backend
-    InitVulkanBootstrap(&ctx);
+    bool vulkan_ok = InitVulkanBootstrap(&ctx);
+    if (!vulkan_ok) {
+        LOGE("Vulkan 1.1+ is not supported on this device/emulator.");
+        Tomodachi::Platform::AndroidStorage::Instance().ShowFatalDialog(
+            "Vulkan Support Required",
+            "Vulkan 1.1+ is required but not supported or disabled on this device or emulator.\n\n"
+            "If using an Android emulator (BlueStacks, LDPlayer, Android Studio), please enable Vulkan in its graphics settings."
+        );
+    }
 
     // Main Game & Event Loop
     while (true) {
@@ -246,8 +254,8 @@ void android_main(struct android_app* app) {
         int events;
         struct android_poll_source* source = nullptr;
 
-        // Block when in background or awaiting assets; poll immediately when active
-        int timeout_ms = (!ctx.has_focus || !ctx.assets_verified) ? -1 : 0;
+        // Block when in background or awaiting assets/Vulkan; poll immediately when active
+        int timeout_ms = (!ctx.has_focus || !ctx.assets_verified || !vulkan_ok) ? -1 : 0;
 
         while ((ident = ALooper_pollOnce(timeout_ms, nullptr, &events, (void**)&source)) >= 0) {
             if (source != nullptr) {

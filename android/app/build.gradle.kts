@@ -10,29 +10,42 @@ plugins {
 android {
     namespace = "com.recomp.tomodachiltd"
     compileSdk = 34
-    // ndkVersion will auto-detect from ANDROID_NDK_HOME or setup-ndk
 
     defaultConfig {
         applicationId = "com.recomp.tomodachiltd"
         minSdk = 29
         targetSdk = 34
         versionCode = 1
-        versionName = "1.0.0-arm64"
+        versionName = "1.0.0"
 
         ndk {
-            abiFilters.add("arm64-v8a")
+            abiFilters.addAll(listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86"))
         }
 
         externalNativeBuild {
             cmake {
                 arguments(
                     "-DANDROID_STL=c++_static",
-                    "-DANDROID_ARM_NEON=ON",
                     "-DANDROID_PLATFORM=android-29",
                     "-DCMAKE_BUILD_TYPE=Release"
                 )
-                cppFlags("-std=c++20", "-O3", "-fvisibility=hidden")
+                cppFlags("-std=c++20", "-O3")
             }
+        }
+    }
+
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
+            isUniversalApk = true
+        }
+    }
+
+    signingConfigs {
+        getByName("debug") {
+            // Standard Android debug certificate
         }
     }
 

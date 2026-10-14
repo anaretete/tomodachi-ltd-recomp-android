@@ -31,6 +31,7 @@ public:
 
     // Show native Android modal dialog via JNI when assets are missing
     void ShowFatalAssetDialog(const std::string& targetPath);
+    void ShowFatalDialog(const std::string& title, const std::string& message);
 
     // Accessors
     const StoragePaths& GetPaths() const { return m_paths; }

@@ -1,4 +1,4 @@
-name: Build Android APK & Publish Release
+name: Build Multi-Architecture Android APKs & Publish Release
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   build:
-    name: Build Native arm64-v8a APK
+    name: Build Multi-ABI APKs (Universal, ARM64, ARM32, x86_64, x86)
     runs-on: ubuntu-latest
 
     steps:
@@ -41,54 +41,93 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      - name: Build Android Release APK with Gradle
+      - name: Build All Android Release APKs
         run: |
           cd android
           gradle wrapper
           chmod +x gradlew
           ./gradlew assembleRelease --stacktrace
 
-      - name: Locate and Stage APK
-        id: stage_apk
+      - name: Stage and Sign All APKs
         run: |
           mkdir -p artifacts
-          APK_PATH=$(find android/app/build/outputs/apk/release -name "*.apk" | head -n 1)
-          if [ -z "$APK_PATH" ]; then
-            APK_PATH=$(find android/app/build/outputs/apk -name "*.apk" | head -n 1)
-          fi
-          echo "Found APK at: $APK_PATH"
-          cp "$APK_PATH" artifacts/tomodachi-ltd-recomp-arm64.apk
-          echo "apk_path=artifacts/tomodachi-ltd-recomp-arm64.apk" >> $GITHUB_OUTPUT
 
-      - name: Upload APK Artifact
+          # Generate dedicated release signing keystore
+          keytool -genkey -v -keystore release.jks -alias tomodachi -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass android -keypass android -dname "CN=Tomodachi, OU=Recomp, O=Recomp, L=City, S=State, C=US"
+
+          # Find apksigner
+          APKSIGNER=$(find $ANDROID_SDK_ROOT/build-tools -name apksigner | sort -V | tail -n 1)
+          echo "Using apksigner at: $APKSIGNER"
+
+          # Locate all built release APKs
+          find android/app/build/outputs/apk/release -name "*.apk" -print
+
+          for f in $(find android/app/build/outputs/apk/release -name "*.apk"); do
+            filename=$(basename "$f")
+            echo "Processing $filename..."
+
+            dest_name="tomodachi-ltd-recomp-${filename}"
+            if [[ "$filename" == *"universal"* ]]; then
+              dest_name="tomodachi-ltd-recomp-universal.apk"
+            elif [[ "$filename" == *"arm64-v8a"* ]]; then
+              dest_name="tomodachi-ltd-recomp-arm64-v8a.apk"
+            elif [[ "$filename" == *"armeabi-v7a"* ]]; then
+              dest_name="tomodachi-ltd-recomp-armeabi-v7a.apk"
+            elif [[ "$filename" == *"x86_64"* ]]; then
+              dest_name="tomodachi-ltd-recomp-x86_64.apk"
+            elif [[ "$filename" == *"x86"* ]]; then
+              dest_name="tomodachi-ltd-recomp-x86.apk"
+            else
+              dest_name="tomodachi-ltd-recomp-release.apk"
+            fi
+
+            cp "$f" "artifacts/$dest_name"
+            
+            # Sign with apksigner (V1, V2, V3, V4 schemes)
+            $APKSIGNER sign --ks release.jks --ks-pass pass:android --key-pass pass:android "artifacts/$dest_name"
+            $APKSIGNER verify "artifacts/$dest_name"
+            echo "Successfully signed and verified artifacts/$dest_name"
+          done
+
+          ls -lh artifacts/
+
+      - name: Upload APK Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: tomodachi-ltd-recomp-arm64
-          path: artifacts/tomodachi-ltd-recomp-arm64.apk
+          name: tomodachi-ltd-recomp-all-apks
+          path: artifacts/*.apk
 
-      - name: Create GitHub Release & Publish APK
+      - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event_name == 'workflow_dispatch'
         with:
           tag_name: v1.0.0
           name: "Tomodachi Life Recomp Android v1.0.0"
           body: |
-            ### Native Android Port for `tomodachi-ltd-recomp`
+            ### Native Android Port for `tomodachi-ltd-recomp` (Multi-Architecture)
+            
+            **Available APK Downloads:**
+            - **`tomodachi-ltd-recomp-universal.apk`**: All-in-one APK supporting ARM64, ARM32, x86_64, and x86 devices and emulators. (Recommended)
+            - **`tomodachi-ltd-recomp-arm64-v8a.apk`**: Optimized for modern 64-bit ARM smartphones and tablets.
+            - **`tomodachi-ltd-recomp-armeabi-v7a.apk`**: For 32-bit ARM Android devices.
+            - **`tomodachi-ltd-recomp-x86_64.apk`**: Optimized for PC Android emulators (BlueStacks, LDPlayer, Android Studio, WSA) and Chromebooks.
+            - **`tomodachi-ltd-recomp-x86.apk`**: For 32-bit x86 emulators.
             
             **Release Highlights:**
-            - Native 64-bit ARM (`arm64-v8a`) executable linked against Vulkan 1.1+ and SDL3.
-            - Full Android NativeActivity lifecycle integration with `ANativeWindow` swapchain handling.
-            - Low-latency on-screen virtual touchscreen controller overlay (Left Stick, D-Pad, A/B/X/Y, Shoulders, System buttons, and capacitive touch pass-through).
-            - Android storage virtualization and RomFS verification with automatic missing-asset notification dialog.
+            - All APKs fully signed and verified with Android v1/v2/v3 signatures for direct installation.
+            - Native C++20 entry point with `ANativeActivity_onCreate` symbol properly exported.
+            - Low-latency virtual touchscreen controller overlay with analog stick, D-Pad, face buttons, shoulders, and screen touch pass-through.
+            - RomFS storage verification and automatic missing-asset notification dialog.
             
-            #### Instructions:
-            1. Download and install `tomodachi-ltd-recomp-arm64.apk`.
+            #### How to Install & Play:
+            1. Download and install `tomodachi-ltd-recomp-universal.apk` (or your architecture's APK).
             2. Dump your Switch game `romfs` folder.
             3. Copy the extracted `romfs` folder to:
                `/sdcard/Android/data/com.recomp.tomodachiltd/files/romfs`
             4. Launch the application!
           draft: false
           prerelease: false
-          files: artifacts/tomodachi-ltd-recomp-arm64.apk
+          files: artifacts/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

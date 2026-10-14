@@ -169,6 +169,16 @@ std::string AndroidStorage::ResolveVirtualPath(const std::string& relativePath) 
 }
 
 void AndroidStorage::ShowFatalAssetDialog(const std::string& targetPath) {
+    std::string titleStr = "Missing Game Assets (RomFS)";
+    std::string messageStr = 
+        "Tomodachi Life Recomp requires dumped Nintendo Switch RomFS assets to launch.\n\n"
+        "Please extract and place your 'romfs' directory at:\n" + 
+        targetPath + "\n\n"
+        "Then restart the application.";
+    ShowFatalDialog(titleStr, messageStr);
+}
+
+void AndroidStorage::ShowFatalDialog(const std::string& title, const std::string& message) {
     if (!m_app || !m_app->activity || !m_app->activity->vm) {
         LOGE("Cannot show fatal dialog: JNI environment unavailable.");
         return;
@@ -182,7 +192,7 @@ void AndroidStorage::ShowFatalAssetDialog(const std::string& targetPath) {
         return;
     }
 
-    LOGE("Showing fatal asset missing dialog. Target: %s", targetPath.c_str());
+    LOGE("Showing fatal dialog. [%s] %s", title.c_str(), message.c_str());
 
     jclass activityClass = env->GetObjectClass(m_app->activity->clazz);
     if (!activityClass) {
@@ -191,7 +201,6 @@ void AndroidStorage::ShowFatalAssetDialog(const std::string& targetPath) {
     }
 
     // Call native alert via JNI Runnable on UI Thread
-    // Construct AlertDialog directly using JNI
     jclass builderClass = env->FindClass("android/app/AlertDialog$Builder");
     if (!builderClass) {
         if (env->ExceptionCheck()) env->ExceptionClear();
@@ -208,15 +217,8 @@ void AndroidStorage::ShowFatalAssetDialog(const std::string& targetPath) {
     jmethodID setCancelableMethod = env->GetMethodID(builderClass, "setCancelable", "(Z)Landroid/app/AlertDialog$Builder;");
     jmethodID showMethod = env->GetMethodID(builderClass, "show", "()Landroid/app/AlertDialog;");
 
-    std::string titleStr = "Missing Game Assets (RomFS)";
-    std::string messageStr = 
-        "Tomodachi Life Recomp requires dumped Nintendo Switch RomFS assets to launch.\n\n"
-        "Please extract and place your 'romfs' directory at:\n" + 
-        targetPath + "\n\n"
-        "Then restart the application.";
-
-    jstring jTitle = env->NewStringUTF(titleStr.c_str());
-    jstring jMessage = env->NewStringUTF(messageStr.c_str());
+    jstring jTitle = env->NewStringUTF(title.c_str());
+    jstring jMessage = env->NewStringUTF(message.c_str());
     jstring jBtnText = env->NewStringUTF("Exit");
 
     if (builderObj && setTitleMethod && setMessageMethod && setPositiveButtonMethod && showMethod) {

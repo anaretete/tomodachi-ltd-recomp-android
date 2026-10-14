@@ -9,9 +9,15 @@ endif()
 
 message(STATUS "Configuring tomodachi-ltd-recomp for Android (ABI: ${ANDROID_ABI}, API: ${ANDROID_PLATFORM_LEVEL})")
 
-# Enforce 64-bit ARM architecture
-if(NOT ANDROID_ABI STREQUAL "arm64-v8a")
-    message(FATAL_ERROR "tomodachi-ltd-recomp exclusively targets 64-bit ARM (arm64-v8a). Unsupported ABI: ${ANDROID_ABI}")
+# Architecture specific optimization flags
+if(ANDROID_ABI STREQUAL "arm64-v8a")
+    add_compile_options(-march=armv8-a+crypto+crc)
+elseif(ANDROID_ABI STREQUAL "armeabi-v7a")
+    add_compile_options(-march=armv7-a -mfloat-abi=softfp -mfpu=neon)
+elseif(ANDROID_ABI STREQUAL "x86_64")
+    add_compile_options(-march=x86-64 -msse4.2 -mpopcnt)
+elseif(ANDROID_ABI STREQUAL "x86")
+    add_compile_options(-march=i686 -msse3)
 endif()
 
 # Global Android Preprocessor Definitions
@@ -24,14 +30,12 @@ add_compile_definitions(
     NOMINMAX
 )
 
-# Compiler optimization & architecture flags
+# Common Compiler optimization flags
 add_compile_options(
-    -march=armv8-a+crypto+crc
     -O3
     -ffast-math
     -funroll-loops
     -fomit-frame-pointer
-    -fvisibility=hidden
     -Wall
     -Wextra
     -Wno-unused-parameter

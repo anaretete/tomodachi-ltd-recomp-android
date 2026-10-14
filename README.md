@@ -1,16 +1,17 @@
 # Tomodachi Life: Living the Dream — Native Android Port Harness
 
-Native 64-bit ARM (`arm64-v8a`) porting harness for [`tomodachi-ltd-recomp`](https://github.com/RussoPhone/tomodachi-ltd-recomp), a static recompilation of *Tomodachi Life: Living the Dream*.
+Multi-architecture native Android porting harness for [`tomodachi-ltd-recomp`](https://github.com/RussoPhone/tomodachi-ltd-recomp), supporting **ARM64 (`arm64-v8a`)**, **ARM32 (`armeabi-v7a`)**, **x86_64**, and **x86**.
 
 ---
 
 ## Features
 
-- **Native NDK Architecture:** Pure C++20 engine built directly for `arm64-v8a` (Android 10+, API Level 29+) with 16KB page-size alignment support.
-- **Vulkan 1.1+ Rendering:** Full `VkSurfaceKHR` integration using `vkCreateAndroidSurfaceKHR` and safe lifecycle swapchain teardown.
+- **Multi-Architecture Support:** Builds for `arm64-v8a`, `armeabi-v7a`, `x86_64`, and `x86`, with both a Universal APK and architecture-specific splits.
+- **Native NDK Architecture:** Pure C++20 engine with proper JNI/`NativeActivity` exports and 16KB page-size alignment support.
+- **Vulkan 1.1+ Rendering:** Full `VkSurfaceKHR` integration using `vkCreateAndroidSurfaceKHR`, safe lifecycle swapchain teardown, and graceful hardware detection.
 - **Low-Latency Virtual Touch Overlay:** Responsive multi-touch on-screen controller (Left Analog Stick, D-Pad, A/B/X/Y, Shoulders L/R/ZL/ZR, System +/-) and seamless native capacitive screen touch pass-through.
 - **Android Storage Virtualization:** Automatic path redirection for internal and external storage sandboxes, including missing RomFS asset verification and native dialogs.
-- **Automated CI/CD:** GitHub Actions builds and releases the APK automatically upon push or tag creation.
+- **Automated CI/CD & Signed Releases:** GitHub Actions compiles, signs (v1/v2/v3), and releases all APK variants automatically.
 
 ---
 
