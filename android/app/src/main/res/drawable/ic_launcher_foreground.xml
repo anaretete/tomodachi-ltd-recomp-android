@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Left Joy-Con (Neon Cyan) -->
+    <path
+        android:fillColor="#00D2D3"
+        android:pathData="M28,26 C22,26 18,30 18,36 L18,72 C18,78 22,82 28,82 L38,82 L38,26 Z"/>
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M28,40 A5,5 0 1,1 28,30 A5,5 0 1,1 28,40 Z"/>
+    <!-- Right Joy-Con (Neon Red/Pink) -->
+    <path
+        android:fillColor="#FF4757"
+        android:pathData="M80,26 C86,26 90,30 90,36 L90,72 C90,78 86,82 80,82 L70,82 L70,26 Z"/>
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M80,68 A5,5 0 1,1 80,58 A5,5 0 1,1 80,68 Z"/>
+    <!-- Center Screen (Deep Blue) -->
+    <path
+        android:fillColor="#2C3A4E"
+        android:pathData="M42,26 L66,26 L66,82 L42,82 Z"/>
+    <path
+        android:fillColor="#54A0FF"
+        android:pathData="M46,30 L62,30 L62,78 L46,78 Z"/>
+</vector>

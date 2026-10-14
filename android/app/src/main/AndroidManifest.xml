@@ -5,10 +5,10 @@
      ============================================================================== -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Hardware Capabilities: Vulkan 1.1+, Multi-Touch Screen, Gamepad -->
+    <!-- Hardware Capabilities: Vulkan, Touchscreen, Gamepad -->
     <uses-feature
         android:name="android.hardware.vulkan.version"
-        android:version="0x401000"
+        android:version="0x400000"
         android:required="false" />
     <uses-feature
         android:name="android.hardware.touchscreen"
@@ -20,31 +20,26 @@
         android:name="android.hardware.gamepad"
         android:required="false" />
 
-    <!-- Storage and System Permissions -->
+    <!-- Permissions -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
 
     <application
         android:allowBackup="true"
-        android:icon="@android:drawable/sym_def_app_icon"
+        android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:theme="@style/Theme.Tomodachi.Fullscreen"
         android:extractNativeLibs="true">
 
-        <!-- NativeActivity Host -->
+        <!-- 1. Dedicated Startup & Asset Management Activity (Always shows UI on launch) -->
         <activity
-            android:name=".TomodachiActivity"
+            android:name=".MainActivity"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|navigation"
             android:screenOrientation="sensorLandscape"
             android:alwaysRetainTaskState="true"
-            android:launchMode="singleInstance"
+            android:launchMode="singleTop"
             android:exported="true">
-
-            <!-- Shared library name loaded by NativeActivity (libtomodachi_app.so) -->
-            <meta-data
-                android:name="android.app.lib_name"
-                android:value="tomodachi_app" />
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -52,6 +47,28 @@
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- 2. Native Engine Activity (Invoked by Launcher when user starts game or test) -->
+        <activity
+            android:name=".GameActivity"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|navigation"
+            android:screenOrientation="sensorLandscape"
+            android:alwaysRetainTaskState="true"
+            android:exported="false">
+
+            <!-- Shared library name loaded by NativeActivity (libtomodachi_app.so) -->
+            <meta-data
+                android:name="android.app.lib_name"
+                android:value="tomodachi_app" />
+        </activity>
+
+        <!-- Backwards-compatibility alias for older links -->
+        <activity
+            android:name=".TomodachiActivity"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|navigation"
+            android:screenOrientation="sensorLandscape"
+            android:exported="false" />
+
     </application>
 
 </manifest>

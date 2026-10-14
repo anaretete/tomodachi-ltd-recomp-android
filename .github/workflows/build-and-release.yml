@@ -103,29 +103,25 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event_name == 'workflow_dispatch'
         with:
           tag_name: v1.0.0
-          name: "Tomodachi Life Recomp Android v1.0.0"
+          name: "Tomodachi Life Recomp Android v1.0.1"
           body: |
-            ### Native Android Port for `tomodachi-ltd-recomp` (Multi-Architecture)
+            ### Native Android Port for Tomodachi Life Recomp (Multi-Architecture)
             
             **Available APK Downloads:**
             - **`tomodachi-ltd-recomp-universal.apk`**: All-in-one APK supporting ARM64, ARM32, x86_64, and x86 devices and emulators. (Recommended)
             - **`tomodachi-ltd-recomp-arm64-v8a.apk`**: Optimized for modern 64-bit ARM smartphones and tablets.
-            - **`tomodachi-ltd-recomp-armeabi-v7a.apk`**: For 32-bit ARM Android devices.
             - **`tomodachi-ltd-recomp-x86_64.apk`**: Optimized for PC Android emulators (BlueStacks, LDPlayer, Android Studio, WSA) and Chromebooks.
+            - **`tomodachi-ltd-recomp-armeabi-v7a.apk`**: For 32-bit ARM Android devices.
             - **`tomodachi-ltd-recomp-x86.apk`**: For 32-bit x86 emulators.
             
-            **Release Highlights:**
-            - All APKs fully signed and verified with Android v1/v2/v3 signatures for direct installation.
-            - Native C++20 entry point with `ANativeActivity_onCreate` symbol properly exported.
-            - Low-latency virtual touchscreen controller overlay with analog stick, D-Pad, face buttons, shoulders, and screen touch pass-through.
-            - RomFS storage verification and automatic missing-asset notification dialog.
+            **✨ What's New in v1.0.1:**
+            - **Dedicated On-Screen Startup Interface (`MainActivity`)**: When opening the app, an instant full-screen dashboard appears with live status for your decryption keys and game files.
+            - **Direct In-App File Importers**: Select your `prod.keys`, `.nsp`, or `romfs` folder using Android's native system file picker without needing ADB or file managers.
+            - **Dual Graphics Pipeline**: Native Vulkan 1.0/1.1+ renderer with automatic OpenGL ES 3.0 / EGL fallback to prevent black screens on any device or emulator.
+            - **Interactive Controller & Viewport Test Mode**: Test the virtual touch controls, analog sticks, and 60 FPS presentation even before dumping your game files.
+            - **Full Cryptographic Signatures**: All APKs are signed with v1/v2/v3 signatures via `apksigner`.
             
-            #### How to Install & Play:
-            1. Download and install `tomodachi-ltd-recomp-universal.apk` (or your architecture's APK).
-            2. Dump your Switch game `romfs` folder.
-            3. Copy the extracted `romfs` folder to:
-               `/sdcard/Android/data/com.recomp.tomodachiltd/files/romfs`
-            4. Launch the application!
+            *Note on APK Size: The APK is ~600 KB because it contains the compiled native recompilation engine and Android launcher. It does not include Nintendo's copyrighted 2GB game data; import your own dumped keys and game files using the startup screen.*
           draft: false
           prerelease: false
           files: artifacts/*.apk
