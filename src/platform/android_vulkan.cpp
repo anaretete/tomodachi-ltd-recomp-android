@@ -82,7 +82,7 @@ bool AndroidVulkanBridge::CreateSwapchain(VkPhysicalDevice physicalDevice, VkDev
     m_config.color_format = selectedFormat.format;
     m_config.color_space = selectedFormat.colorSpace;
 
-    // Extent
+    // Extent calculation
     VkExtent2D extent = capabilities.currentExtent;
     if (extent.width == 0xFFFFFFFF) {
         extent.width = std::clamp(m_config.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
@@ -91,13 +91,13 @@ bool AndroidVulkanBridge::CreateSwapchain(VkPhysicalDevice physicalDevice, VkDev
     m_config.width = extent.width;
     m_config.height = extent.height;
 
-    // Triple buffering desired
+    // Buffer count
     uint32_t imageCount = capabilities.minImageCount + 1;
     if (capabilities.maxImageCount > 0 && imageCount > capabilities.maxImageCount) {
         imageCount = capabilities.maxImageCount;
     }
 
-    // Present Mode (FIFO guaranteed on Android, Mailbox for unthrottled low-latency)
+    // Present Mode
     uint32_t presentModeCount = 0;
     vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, m_surface, &presentModeCount, nullptr);
     std::vector<VkPresentModeKHR> presentModes(presentModeCount);
@@ -167,12 +167,198 @@ bool AndroidVulkanBridge::CreateSwapchain(VkPhysicalDevice physicalDevice, VkDev
         }
     }
 
-    LOGI("Swapchain created successfully with %u images (%ux%u)", actualCount, extent.width, extent.height);
+    // Create Render Pass for screen clearing & presentation
+    VkAttachmentDescription colorAttachment{};
+    colorAttachment.format = m_config.color_format;
+    colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+    VkAttachmentReference colorAttachmentRef{};
+    colorAttachmentRef.attachment = 0;
+    colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+    VkSubpassDescription subpass{};
+    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpass.colorAttachmentCount = 1;
+    subpass.pColorAttachments = &colorAttachmentRef;
+
+    VkSubpassDependency dependency{};
+    dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+    dependency.dstSubpass = 0;
+    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependency.srcAccessMask = 0;
+    dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+    VkRenderPassCreateInfo renderPassInfo{};
+    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    renderPassInfo.attachmentCount = 1;
+    renderPassInfo.pAttachments = &colorAttachment;
+    renderPassInfo.subpassCount = 1;
+    renderPassInfo.pSubpasses = &subpass;
+    renderPassInfo.dependencyCount = 1;
+    renderPassInfo.pDependencies = &dependency;
+
+    if (vkCreateRenderPass(device, &renderPassInfo, nullptr, &m_render_pass) != VK_SUCCESS) {
+        LOGE("Failed to create Vulkan render pass.");
+        return false;
+    }
+
+    // Create Framebuffers
+    m_framebuffers.resize(actualCount);
+    for (size_t i = 0; i < actualCount; ++i) {
+        VkImageView attachments[] = { m_swapchain_image_views[i] };
+        VkFramebufferCreateInfo fbInfo{};
+        fbInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        fbInfo.renderPass = m_render_pass;
+        fbInfo.attachmentCount = 1;
+        fbInfo.pAttachments = attachments;
+        fbInfo.width = extent.width;
+        fbInfo.height = extent.height;
+        fbInfo.layers = 1;
+
+        if (vkCreateFramebuffer(device, &fbInfo, nullptr, &m_framebuffers[i]) != VK_SUCCESS) {
+            LOGE("Failed to create framebuffer at index %zu", i);
+            return false;
+        }
+    }
+
+    // Create Command Pool & Command Buffer
+    VkCommandPoolCreateInfo poolInfo{};
+    poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    poolInfo.queueFamilyIndex = 0;
+    if (vkCreateCommandPool(device, &poolInfo, nullptr, &m_command_pool) != VK_SUCCESS) {
+        LOGE("Failed to create Vulkan command pool.");
+        return false;
+    }
+
+    VkCommandBufferAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocInfo.commandPool = m_command_pool;
+    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocInfo.commandBufferCount = 1;
+    if (vkAllocateCommandBuffers(device, &allocInfo, &m_command_buffer) != VK_SUCCESS) {
+        LOGE("Failed to allocate Vulkan command buffer.");
+        return false;
+    }
+
+    // Create Synchronization Objects
+    VkSemaphoreCreateInfo semInfo{};
+    semInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+    vkCreateSemaphore(device, &semInfo, nullptr, &m_image_available_sem);
+    vkCreateSemaphore(device, &semInfo, nullptr, &m_render_finished_sem);
+
+    VkFenceCreateInfo fenceInfo{};
+    fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+    vkCreateFence(device, &fenceInfo, nullptr, &m_in_flight_fence);
+
+    LOGI("Swapchain, framebuffers, and render pass initialized successfully (%ux%u)", extent.width, extent.height);
+    return true;
+}
+
+bool AndroidVulkanBridge::RenderFrame(VkDevice device, VkQueue queue, float r, float g, float b) {
+    if (!IsReady() || device == VK_NULL_HANDLE || queue == VK_NULL_HANDLE || m_render_pass == VK_NULL_HANDLE) {
+        return false;
+    }
+
+    vkWaitForFences(device, 1, &m_in_flight_fence, VK_TRUE, UINT64_MAX);
+    vkResetFences(device, 1, &m_in_flight_fence);
+
+    uint32_t imageIndex = 0;
+    VkResult res = vkAcquireNextImageKHR(device, m_swapchain, UINT64_MAX, m_image_available_sem, VK_NULL_HANDLE, &imageIndex);
+    if (res != VK_SUCCESS && res != VK_SUBOPTIMAL_KHR) {
+        return false;
+    }
+
+    vkResetCommandBuffer(m_command_buffer, 0);
+
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    vkBeginCommandBuffer(m_command_buffer, &beginInfo);
+
+    VkClearValue clearColor = {{{ r, g, b, 1.0f }}};
+    VkRenderPassBeginInfo renderPassInfo{};
+    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    renderPassInfo.renderPass = m_render_pass;
+    renderPassInfo.framebuffer = m_framebuffers[imageIndex];
+    renderPassInfo.renderArea.offset = { 0, 0 };
+    renderPassInfo.renderArea.extent = { m_config.width, m_config.height };
+    renderPassInfo.clearValueCount = 1;
+    renderPassInfo.pClearValues = &clearColor;
+
+    vkCmdBeginRenderPass(m_command_buffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+    vkCmdEndRenderPass(m_command_buffer);
+    vkEndCommandBuffer(m_command_buffer);
+
+    VkSubmitInfo submitInfo{};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    VkSemaphore waitSemaphores[] = { m_image_available_sem };
+    VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+    submitInfo.waitSemaphoreCount = 1;
+    submitInfo.pWaitSemaphores = waitSemaphores;
+    submitInfo.pWaitDstStageMask = waitStages;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &m_command_buffer;
+    VkSemaphore signalSemaphores[] = { m_render_finished_sem };
+    submitInfo.signalSemaphoreCount = 1;
+    submitInfo.pSignalSemaphores = signalSemaphores;
+
+    if (vkQueueSubmit(queue, 1, &submitInfo, m_in_flight_fence) != VK_SUCCESS) {
+        return false;
+    }
+
+    VkPresentInfoKHR presentInfo{};
+    presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    presentInfo.waitSemaphoreCount = 1;
+    presentInfo.pWaitSemaphores = signalSemaphores;
+    VkSwapchainKHR swapchains[] = { m_swapchain };
+    presentInfo.swapchainCount = 1;
+    presentInfo.pSwapchains = swapchains;
+    presentInfo.pImageIndices = &imageIndex;
+
+    vkQueuePresentKHR(queue, &presentInfo);
     return true;
 }
 
 void AndroidVulkanBridge::DestroySwapchain(VkDevice device) {
     if (device == VK_NULL_HANDLE) return;
+
+    if (m_in_flight_fence != VK_NULL_HANDLE) {
+        vkDestroyFence(device, m_in_flight_fence, nullptr);
+        m_in_flight_fence = VK_NULL_HANDLE;
+    }
+    if (m_image_available_sem != VK_NULL_HANDLE) {
+        vkDestroySemaphore(device, m_image_available_sem, nullptr);
+        m_image_available_sem = VK_NULL_HANDLE;
+    }
+    if (m_render_finished_sem != VK_NULL_HANDLE) {
+        vkDestroySemaphore(device, m_render_finished_sem, nullptr);
+        m_render_finished_sem = VK_NULL_HANDLE;
+    }
+    if (m_command_pool != VK_NULL_HANDLE) {
+        vkDestroyCommandPool(device, m_command_pool, nullptr);
+        m_command_pool = VK_NULL_HANDLE;
+        m_command_buffer = VK_NULL_HANDLE;
+    }
+
+    for (auto fb : m_framebuffers) {
+        if (fb != VK_NULL_HANDLE) {
+            vkDestroyFramebuffer(device, fb, nullptr);
+        }
+    }
+    m_framebuffers.clear();
+
+    if (m_render_pass != VK_NULL_HANDLE) {
+        vkDestroyRenderPass(device, m_render_pass, nullptr);
+        m_render_pass = VK_NULL_HANDLE;
+    }
 
     for (auto imageView : m_swapchain_image_views) {
         if (imageView != VK_NULL_HANDLE) {

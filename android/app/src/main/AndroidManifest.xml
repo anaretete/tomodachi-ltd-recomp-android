@@ -34,7 +34,7 @@
 
         <!-- NativeActivity Host -->
         <activity
-            android:name="android.app.NativeActivity"
+            android:name=".TomodachiActivity"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|navigation"
             android:screenOrientation="sensorLandscape"
             android:alwaysRetainTaskState="true"

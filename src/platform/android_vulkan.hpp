@@ -34,6 +34,9 @@ public:
     bool CreateSwapchain(VkPhysicalDevice physicalDevice, VkDevice device);
     void DestroySwapchain(VkDevice device);
 
+    // Active Frame Presentation (Renders clear color and submits to screen)
+    bool RenderFrame(VkDevice device, VkQueue queue, float r, float g, float b);
+
     // Accessors
     VkSurfaceKHR GetSurface() const { return m_surface; }
     VkSwapchainKHR GetSwapchain() const { return m_swapchain; }
@@ -55,6 +58,14 @@ private:
 
     std::vector<VkImage> m_swapchain_images;
     std::vector<VkImageView> m_swapchain_image_views;
+    std::vector<VkFramebuffer> m_framebuffers;
+
+    VkRenderPass m_render_pass = VK_NULL_HANDLE;
+    VkCommandPool m_command_pool = VK_NULL_HANDLE;
+    VkCommandBuffer m_command_buffer = VK_NULL_HANDLE;
+    VkSemaphore m_image_available_sem = VK_NULL_HANDLE;
+    VkSemaphore m_render_finished_sem = VK_NULL_HANDLE;
+    VkFence m_in_flight_fence = VK_NULL_HANDLE;
 };
 
 } // namespace Tomodachi::Platform

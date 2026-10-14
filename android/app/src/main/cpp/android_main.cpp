@@ -254,8 +254,8 @@ void android_main(struct android_app* app) {
         int events;
         struct android_poll_source* source = nullptr;
 
-        // Block when in background or awaiting assets/Vulkan; poll immediately when active
-        int timeout_ms = (!ctx.has_focus || !ctx.assets_verified || !vulkan_ok) ? -1 : 0;
+        // Non-blocking poll when app is active and focused
+        int timeout_ms = (!ctx.has_focus || !ctx.window_ready) ? -1 : 0;
 
         while ((ident = ALooper_pollOnce(timeout_ms, nullptr, &events, (void**)&source)) >= 0) {
             if (source != nullptr) {
@@ -277,16 +277,25 @@ void android_main(struct android_app* app) {
             }
         }
 
-        // Active Frame Tick
-        if (ctx.has_focus && ctx.window_ready && ctx.assets_verified) {
+        // Active Frame Tick & Vulkan Presentation (Eliminates black screen)
+        if (ctx.has_focus && ctx.window_ready && vulkan_ok) {
             // Retrieve current virtual controller input buffer
             auto padState = Tomodachi::Input::TouchOverlay::Instance().GetState();
 
-            // Render loop placeholder for lifted recompilation step:
-            // 1. Step lifted game logic tick with padState
-            // 2. Update audio buffers
-            // 3. Render game frame + Touch Overlay to Vulkan swapchain
-            std::this_thread::sleep_for(std::chrono::milliseconds(16)); // Target ~60 FPS
+            // Dynamic color feedback:
+            // Sleek Tomodachi sky-blue (#2471a3) default, shifts brighter when touching
+            float r = padState.touch_active ? 0.25f : 0.14f;
+            float g = padState.touch_active ? 0.55f : 0.44f;
+            float b = padState.touch_active ? 0.80f : 0.64f;
+
+            // Render and present frame to Vulkan swapchain
+            Tomodachi::Platform::AndroidVulkanBridge::Instance().RenderFrame(
+                ctx.vk_device,
+                ctx.vk_queue,
+                r, g, b
+            );
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(16)); // ~60 FPS presentation
         }
     }
 }

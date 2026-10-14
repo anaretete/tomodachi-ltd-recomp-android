@@ -192,54 +192,25 @@ void AndroidStorage::ShowFatalDialog(const std::string& title, const std::string
         return;
     }
 
-    LOGE("Showing fatal dialog. [%s] %s", title.c_str(), message.c_str());
+    LOGE("Showing fatal dialog: [%s] %s", title.c_str(), message.c_str());
 
-    jclass activityClass = env->GetObjectClass(m_app->activity->clazz);
-    if (!activityClass) {
-        vm->DetachCurrentThread();
-        return;
-    }
-
-    // Call native alert via JNI Runnable on UI Thread
-    jclass builderClass = env->FindClass("android/app/AlertDialog$Builder");
-    if (!builderClass) {
-        if (env->ExceptionCheck()) env->ExceptionClear();
-        vm->DetachCurrentThread();
-        return;
-    }
-
-    jmethodID builderCtor = env->GetMethodID(builderClass, "<init>", "(Landroid/content/Context;)V");
-    jobject builderObj = env->NewObject(builderClass, builderCtor, m_app->activity->clazz);
-
-    jmethodID setTitleMethod = env->GetMethodID(builderClass, "setTitle", "(Ljava/lang/CharSequence;)Landroid/app/AlertDialog$Builder;");
-    jmethodID setMessageMethod = env->GetMethodID(builderClass, "setMessage", "(Ljava/lang/CharSequence;)Landroid/app/AlertDialog$Builder;");
-    jmethodID setPositiveButtonMethod = env->GetMethodID(builderClass, "setPositiveButton", "(Ljava/lang/CharSequence;Landroid/content/DialogInterface$OnClickListener;)Landroid/app/AlertDialog$Builder;");
-    jmethodID setCancelableMethod = env->GetMethodID(builderClass, "setCancelable", "(Z)Landroid/app/AlertDialog$Builder;");
-    jmethodID showMethod = env->GetMethodID(builderClass, "show", "()Landroid/app/AlertDialog;");
-
-    jstring jTitle = env->NewStringUTF(title.c_str());
-    jstring jMessage = env->NewStringUTF(message.c_str());
-    jstring jBtnText = env->NewStringUTF("Exit");
-
-    if (builderObj && setTitleMethod && setMessageMethod && setPositiveButtonMethod && showMethod) {
-        env->CallObjectMethod(builderObj, setTitleMethod, jTitle);
-        env->CallObjectMethod(builderObj, setMessageMethod, jMessage);
-        env->CallObjectMethod(builderObj, setCancelableMethod, (jboolean)JNI_FALSE);
-        env->CallObjectMethod(builderObj, setPositiveButtonMethod, jBtnText, (jobject)nullptr);
-        env->CallObjectMethod(builderObj, showMethod);
+    jclass activityClass = env->FindClass("com/recomp/tomodachiltd/TomodachiActivity");
+    if (activityClass) {
+        jmethodID showModal = env->GetStaticMethodID(activityClass, "showModalDialog", "(Ljava/lang/String;Ljava/lang/String;)V");
+        if (showModal) {
+            jstring jTitle = env->NewStringUTF(title.c_str());
+            jstring jMessage = env->NewStringUTF(message.c_str());
+            env->CallStaticVoidMethod(activityClass, showModal, jTitle, jMessage);
+            env->DeleteLocalRef(jTitle);
+            env->DeleteLocalRef(jMessage);
+        }
+        env->DeleteLocalRef(activityClass);
     }
 
     if (env->ExceptionCheck()) {
         env->ExceptionDescribe();
         env->ExceptionClear();
     }
-
-    env->DeleteLocalRef(jTitle);
-    env->DeleteLocalRef(jMessage);
-    env->DeleteLocalRef(jBtnText);
-    env->DeleteLocalRef(builderObj);
-    env->DeleteLocalRef(builderClass);
-    env->DeleteLocalRef(activityClass);
 
     vm->DetachCurrentThread();
 }
