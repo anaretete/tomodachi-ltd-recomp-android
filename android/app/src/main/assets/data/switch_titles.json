@@ -1,0 +1,30 @@
+{
+  "titles": [
+    {
+      "id": "0100D77011B8E000",
+      "name": "Tomodachi Life: Living the Dream",
+      "publisher": "Nintendo",
+      "version": "1.0.0",
+      "sdk_version": "17.0.0",
+      "main_nca_type": "program",
+      "supported_formats": ["xci", "nsp", "romfs"],
+      "key_generation": 17,
+      "requires_keys": ["prod.keys"],
+      "optional_files": ["title.keys", "firmware"]
+    }
+  ],
+  "firmware": {
+    "recommended_version": "18.1.0",
+    "minimum_version": "15.0.0",
+    "shared_fonts": [
+      "NintendoStandard.ttf",
+      "NintendoExtended.ttf",
+      "NintendoColorEmoji.ttf"
+    ],
+    "system_archives": [
+      "0100000000000810",
+      "0100000000000811",
+      "0100000000000813"
+    ]
+  }
+}

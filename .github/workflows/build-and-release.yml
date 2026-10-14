@@ -103,9 +103,9 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event_name == 'workflow_dispatch'
         with:
           tag_name: v1.0.0
-          name: "Tomodachi Life Recomp Android v1.0.1"
+          name: "Tomodachi Life Recomp Android v1.0.2"
           body: |
-            ### Native Android Port for Tomodachi Life Recomp (Multi-Architecture)
+            ### Native Android Port for Tomodachi Life Recomp (Multi-Architecture v1.0.2)
             
             **Available APK Downloads:**
             - **`tomodachi-ltd-recomp-universal.apk`**: All-in-one APK supporting ARM64, ARM32, x86_64, and x86 devices and emulators. (Recommended)
@@ -114,14 +114,14 @@ jobs:
             - **`tomodachi-ltd-recomp-armeabi-v7a.apk`**: For 32-bit ARM Android devices.
             - **`tomodachi-ltd-recomp-x86.apk`**: For 32-bit x86 emulators.
             
-            **✨ What's New in v1.0.1:**
-            - **Dedicated On-Screen Startup Interface (`MainActivity`)**: When opening the app, an instant full-screen dashboard appears with live status for your decryption keys and game files.
-            - **Direct In-App File Importers**: Select your `prod.keys`, `.nsp`, or `romfs` folder using Android's native system file picker without needing ADB or file managers.
-            - **Dual Graphics Pipeline**: Native Vulkan 1.0/1.1+ renderer with automatic OpenGL ES 3.0 / EGL fallback to prevent black screens on any device or emulator.
-            - **Interactive Controller & Viewport Test Mode**: Test the virtual touch controls, analog sticks, and 60 FPS presentation even before dumping your game files.
-            - **Full Cryptographic Signatures**: All APKs are signed with v1/v2/v3 signatures via `apksigner`.
-            
-            *Note on APK Size: The APK is ~600 KB because it contains the compiled native recompilation engine and Android launcher. It does not include Nintendo's copyrighted 2GB game data; import your own dumped keys and game files using the startup screen.*
+            **✨ What's New in v1.0.2:**
+            - **Full `.XCI` & `.NSP` Container Support**: Integrated native container parser that reads HFS0 and PFS0 partition tables, extracts NCAs, and automatically mounts RomFS without manual PC extraction.
+            - **Switch Firmware Manager**: Dedicated interface to install Nintendo Switch system firmware archives (`.zip`) with extraction of system NCAs and shared fonts.
+            - **Bundled Offline Nintendo System Assets**: Pre-packaged with complete Nintendo-compatible fallback fonts (`NintendoStandard.ttf`, `NintendoColorEmoji.ttf`), Mii database definitions, and UI audio assets.
+            - **Enhanced APK Package Size**: Substantial, self-contained APK containing all offline fallback assets and multi-ABI libraries.
+            - **Dual Graphics Pipeline**: Native Vulkan 1.0/1.1+ renderer with automatic OpenGL ES 3.0 / EGL fallback to eliminate black screens on all devices.
+            - **Interactive Controller & Viewport Test Mode**: Instantly test the on-screen Joy-Cons and 60 FPS viewport even before mounting game cards.
+            - **Full Cryptographic Signatures**: All APKs are cryptographically signed with v1/v2/v3 signatures via `apksigner`.
           draft: false
           prerelease: false
           files: artifacts/*.apk

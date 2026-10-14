@@ -1,6 +1,6 @@
 // ==============================================================================
 // android/app/src/main/java/com/recomp/tomodachiltd/MainActivity.java
-// Dedicated Setup, Asset Installer & Launcher Interface for Tomodachi Life Recomp
+// Advanced Switch Game Launcher, XCI & NSP Container Manager & Firmware Installer
 // ==============================================================================
 
 package com.recomp.tomodachiltd;
@@ -12,9 +12,12 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.FeatureInfo;
 import android.content.pm.PackageManager;
+import android.content.res.AssetFileDescriptor;
+import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -28,8 +31,7 @@ import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.Button;
-import android.widget.CheckBox;
-import android.widget.HorizontalScrollView;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.ScrollView;
@@ -46,11 +48,14 @@ import java.io.OutputStream;
 public class MainActivity extends Activity {
     private static final String TAG = "TomodachiLauncher";
 
-    private static final int REQ_KEYS   = 1001;
-    private static final int REQ_NSP    = 1002;
-    private static final int REQ_ROMFS  = 1003;
+    private static final int REQ_KEYS       = 1001;
+    private static final int REQ_TITLE_KEYS = 1002;
+    private static final int REQ_GAME_PKG   = 1003;
+    private static final int REQ_ROMFS_DIR  = 1004;
+    private static final int REQ_FIRMWARE   = 1005;
 
     private TextView mKeysStatusText;
+    private TextView mFirmwareStatusText;
     private TextView mGameStatusText;
     private Button mLaunchButton;
     private Button mTestModeButton;
@@ -58,13 +63,20 @@ public class MainActivity extends Activity {
     private TextView mProgressLabel;
     private TextView mDeviceSpecText;
 
+    // Game Library Card Views
+    private LinearLayout mGameCardContainer;
+    private ImageView mGameIconView;
+    private TextView mGameTitleText;
+    private TextView mGameMetaText;
+    private TextView mGameBadgeText;
+
     private final Handler mHandler = new Handler(Looper.getMainLooper());
+    private MediaPlayer mMediaPlayer;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Enable immersive full-screen landscape
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
@@ -73,14 +85,14 @@ public class MainActivity extends Activity {
         }
 
         buildUserInterface();
-        refreshAssetStatus();
+        refreshAllStatus();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
         hideSystemUI();
-        refreshAssetStatus();
+        refreshAllStatus();
     }
 
     private void hideSystemUI() {
@@ -97,6 +109,12 @@ public class MainActivity extends Activity {
 
     public static File getKeysDir(Context context) {
         File dir = new File(context.getFilesDir(), "keys");
+        if (!dir.exists()) dir.mkdirs();
+        return dir;
+    }
+
+    public static File getFirmwareDir(Context context) {
+        File dir = new File(context.getFilesDir(), "firmware/contents/registered");
         if (!dir.exists()) dir.mkdirs();
         return dir;
     }
@@ -120,24 +138,52 @@ public class MainActivity extends Activity {
         return keysFile.exists() && keysFile.length() > 0;
     }
 
+    public static boolean checkFirmwareExist(Context context) {
+        File fwDir = getFirmwareDir(context);
+        if (fwDir.exists() && fwDir.isDirectory()) {
+            String[] list = fwDir.list();
+            return list != null && list.length > 5;
+        }
+        return false;
+    }
+
     public static boolean checkGameExists(Context context) {
         File romfs = getRomFsDir(context);
         if (romfs.exists() && romfs.isDirectory()) {
             String[] list = romfs.list();
             if (list != null && list.length > 0) return true;
         }
-        File nsp = new File(getGamesDir(context), "tomodachi.nsp");
-        return nsp.exists() && nsp.length() > 0;
+        File gamesDir = getGamesDir(context);
+        File xci = new File(gamesDir, "tomodachi_game.xci");
+        File nsp = new File(gamesDir, "tomodachi_game.nsp");
+        File oldNsp = new File(gamesDir, "tomodachi.nsp");
+        return (xci.exists() && xci.length() > 0) || (nsp.exists() && nsp.length() > 0) || (oldNsp.exists() && oldNsp.length() > 0);
+    }
+
+    private void playSound(String soundAsset) {
+        try {
+            if (mMediaPlayer != null) {
+                mMediaPlayer.release();
+                mMediaPlayer = null;
+            }
+            AssetFileDescriptor afd = getAssets().openFd("sounds/" + soundAsset);
+            mMediaPlayer = new MediaPlayer();
+            mMediaPlayer.setDataSource(afd.getFileDescriptor(), afd.getStartOffset(), afd.getLength());
+            afd.close();
+            mMediaPlayer.prepare();
+            mMediaPlayer.start();
+        } catch (Exception ignored) {
+        }
     }
 
     private void buildUserInterface() {
         ScrollView scrollView = new ScrollView(this);
         scrollView.setFillViewport(true);
-        scrollView.setBackgroundColor(Color.parseColor("#0F141C"));
+        scrollView.setBackgroundColor(Color.parseColor("#0D1117"));
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(20), dp(16), dp(20), dp(20));
+        root.setPadding(dp(20), dp(14), dp(20), dp(20));
 
         // 1. HEADER SECTION
         LinearLayout header = new LinearLayout(this);
@@ -146,168 +192,200 @@ public class MainActivity extends Activity {
 
         TextView title = new TextView(this);
         title.setText("TOMODACHI LIFE: LIVING THE DREAM");
-        title.setTextColor(Color.parseColor("#54A0FF"));
-        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 22);
+        title.setTextColor(Color.parseColor("#58A6FF"));
+        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 21);
         title.setTypeface(Typeface.create("sans-serif-black", Typeface.BOLD));
         title.setGravity(Gravity.CENTER);
         header.addView(title);
 
         TextView subtitle = new TextView(this);
-        subtitle.setText("Native Nintendo Switch Recompilation Harness • Android Edition");
-        subtitle.setTextColor(Color.parseColor("#8395A7"));
+        subtitle.setText("Native Nintendo Switch Recompilation Engine • Multi-Format Harness");
+        subtitle.setTextColor(Color.parseColor("#8B949E"));
         subtitle.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
         subtitle.setGravity(Gravity.CENTER);
-        subtitle.setPadding(0, dp(2), 0, dp(10));
+        subtitle.setPadding(0, dp(2), 0, dp(8));
         header.addView(subtitle);
 
-        // Hardware Diagnostic Badge
+        // Hardware & Architecture Spec Pill
         mDeviceSpecText = new TextView(this);
         mDeviceSpecText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
-        mDeviceSpecText.setTextColor(Color.parseColor("#00D2D3"));
+        mDeviceSpecText.setTextColor(Color.parseColor("#39D353"));
         mDeviceSpecText.setGravity(Gravity.CENTER);
         mDeviceSpecText.setPadding(dp(12), dp(4), dp(12), dp(4));
-        mDeviceSpecText.setBackground(createRoundedBackground("#1B293C", "#2C3E50", 6));
+        mDeviceSpecText.setBackground(createRoundedBackground("#161B22", "#30363D", 6));
         mDeviceSpecText.setText(getSystemDiagnostics());
         header.addView(mDeviceSpecText);
 
         root.addView(header);
 
-        // 2. SETUP PANELS (HORIZONTAL ON TABLETS/LANDSCAPE, STACKED)
+        // 2. ACTIVE GAME CARD (HIGHLIGHTS LOADED XCI / NSP / ROMFS)
+        mGameCardContainer = createGameCard();
+        root.addView(mGameCardContainer);
+
+        // 3. CONFIGURATION & PROVISIONING PANELS (3 HORIZONTAL CARDS)
         LinearLayout panelsRow = new LinearLayout(this);
         panelsRow.setOrientation(LinearLayout.HORIZONTAL);
-        panelsRow.setPadding(0, dp(14), 0, dp(10));
+        panelsRow.setPadding(0, dp(10), 0, dp(10));
 
-        // --- PANEL 1: PROD.KEYS ---
-        LinearLayout keysCard = createPanelCard("1. Decryption Keys (prod.keys)");
-        LinearLayout.LayoutParams cardParams1 = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f);
-        cardParams1.rightMargin = dp(8);
-        keysCard.setLayoutParams(cardParams1);
+        // --- CARD 1: KEYS ---
+        LinearLayout keysCard = createPanelCard("1. Decryption Keys");
+        LinearLayout.LayoutParams p1 = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f);
+        p1.rightMargin = dp(6);
+        keysCard.setLayoutParams(p1);
 
         mKeysStatusText = new TextView(this);
-        mKeysStatusText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
-        mKeysStatusText.setPadding(0, dp(2), 0, dp(10));
+        mKeysStatusText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        mKeysStatusText.setPadding(0, dp(2), 0, dp(8));
         keysCard.addView(mKeysStatusText);
 
-        LinearLayout keysBtnRow = new LinearLayout(this);
-        keysBtnRow.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout keysRow = new LinearLayout(this);
+        keysRow.setOrientation(LinearLayout.HORIZONTAL);
 
-        Button btnPickKeys = createStyledButton("Select prod.keys", "#2980B9");
-        LinearLayout.LayoutParams btnP1 = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f);
-        btnP1.rightMargin = dp(4);
-        btnPickKeys.setLayoutParams(btnP1);
-        btnPickKeys.setOnClickListener(new View.OnClickListener() {
+        Button btnKeys = createStyledButton("prod.keys", "#1F6FEB");
+        LinearLayout.LayoutParams k1 = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f);
+        k1.rightMargin = dp(4);
+        btnKeys.setLayoutParams(k1);
+        btnKeys.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                playSound("button_click.wav");
                 pickDocument(REQ_KEYS, "*/*");
             }
         });
-        keysBtnRow.addView(btnPickKeys);
+        keysRow.addView(btnKeys);
 
-        Button btnKeysInfo = createStyledButton("Info", "#34495E");
-        LinearLayout.LayoutParams btnP2 = new LinearLayout.LayoutParams(dp(70), ViewGroup.LayoutParams.WRAP_CONTENT);
-        btnKeysInfo.setLayoutParams(btnP2);
-        btnKeysInfo.setOnClickListener(new View.OnClickListener() {
+        Button btnTitleKeys = createStyledButton("title.keys", "#238636");
+        LinearLayout.LayoutParams k2 = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f);
+        btnTitleKeys.setLayoutParams(k2);
+        btnTitleKeys.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                showInfoDialog(
-                    "Switch Decryption Keys",
-                    "The recompilation engine requires your console's 'prod.keys' file to decrypt game audio and asset packages.\n\n"
-                    + "Path: " + getKeysDir(MainActivity.this).getAbsolutePath() + "/prod.keys\n\n"
-                    + "Tap 'Select prod.keys' to browse and import your keys file directly."
-                );
+                playSound("button_click.wav");
+                pickDocument(REQ_TITLE_KEYS, "*/*");
             }
         });
-        keysBtnRow.addView(btnKeysInfo);
-        keysCard.addView(keysBtnRow);
+        keysRow.addView(btnTitleKeys);
+        keysCard.addView(keysRow);
         panelsRow.addView(keysCard);
 
-        // --- PANEL 2: GAME DATA ---
-        LinearLayout gameCard = createPanelCard("2. Game Dump (.nsp or romfs)");
-        LinearLayout.LayoutParams cardParams2 = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f);
-        cardParams2.leftMargin = dp(8);
-        gameCard.setLayoutParams(cardParams2);
+        // --- CARD 2: GAME PACKAGE (.XCI / .NSP) ---
+        LinearLayout gameCard = createPanelCard("2. Game Card / Package");
+        LinearLayout.LayoutParams p2 = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.2f);
+        p2.rightMargin = dp(6);
+        p2.leftMargin = dp(6);
+        gameCard.setLayoutParams(p2);
 
         mGameStatusText = new TextView(this);
-        mGameStatusText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
-        mGameStatusText.setPadding(0, dp(2), 0, dp(10));
+        mGameStatusText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        mGameStatusText.setPadding(0, dp(2), 0, dp(8));
         gameCard.addView(mGameStatusText);
 
-        LinearLayout gameBtnRow = new LinearLayout(this);
-        gameBtnRow.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout gameRow = new LinearLayout(this);
+        gameRow.setOrientation(LinearLayout.HORIZONTAL);
 
-        Button btnPickNsp = createStyledButton("Import .nsp", "#27AE60");
-        LinearLayout.LayoutParams btnG1 = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f);
-        btnG1.rightMargin = dp(4);
-        btnPickNsp.setLayoutParams(btnG1);
-        btnPickNsp.setOnClickListener(new View.OnClickListener() {
+        Button btnGamePkg = createStyledButton("Install .XCI / .NSP", "#238636");
+        LinearLayout.LayoutParams g1 = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.3f);
+        g1.rightMargin = dp(4);
+        btnGamePkg.setLayoutParams(g1);
+        btnGamePkg.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                pickDocument(REQ_NSP, "*/*");
+                playSound("button_click.wav");
+                pickDocument(REQ_GAME_PKG, "*/*");
             }
         });
-        gameBtnRow.addView(btnPickNsp);
+        gameRow.addView(btnGamePkg);
 
-        Button btnPickRomfs = createStyledButton("Import RomFS", "#16A085");
-        LinearLayout.LayoutParams btnG2 = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f);
-        btnG2.rightMargin = dp(4);
-        btnPickRomfs.setLayoutParams(btnG2);
-        btnPickRomfs.setOnClickListener(new View.OnClickListener() {
+        Button btnRomfs = createStyledButton("RomFS Folder", "#161B22");
+        LinearLayout.LayoutParams g2 = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f);
+        btnRomfs.setLayoutParams(g2);
+        btnRomfs.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                pickFolder(REQ_ROMFS);
+                playSound("button_click.wav");
+                pickFolder(REQ_ROMFS_DIR);
             }
         });
-        gameBtnRow.addView(btnPickRomfs);
+        gameRow.addView(btnRomfs);
+        gameCard.addView(gameRow);
+        panelsRow.addView(gameCard);
 
-        Button btnGameInfo = createStyledButton("Paths", "#34495E");
-        LinearLayout.LayoutParams btnG3 = new LinearLayout.LayoutParams(dp(70), ViewGroup.LayoutParams.WRAP_CONTENT);
-        btnGameInfo.setLayoutParams(btnG3);
-        btnGameInfo.setOnClickListener(new View.OnClickListener() {
+        // --- CARD 3: FIRMWARE ---
+        LinearLayout fwCard = createPanelCard("3. Switch Firmware");
+        LinearLayout.LayoutParams p3 = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f);
+        p3.leftMargin = dp(6);
+        fwCard.setLayoutParams(p3);
+
+        mFirmwareStatusText = new TextView(this);
+        mFirmwareStatusText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        mFirmwareStatusText.setPadding(0, dp(2), 0, dp(8));
+        fwCard.addView(mFirmwareStatusText);
+
+        LinearLayout fwRow = new LinearLayout(this);
+        fwRow.setOrientation(LinearLayout.HORIZONTAL);
+
+        Button btnFw = createStyledButton("Install (.zip)", "#8957E5");
+        LinearLayout.LayoutParams f1 = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f);
+        f1.rightMargin = dp(4);
+        btnFw.setLayoutParams(f1);
+        btnFw.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                playSound("button_click.wav");
+                pickDocument(REQ_FIRMWARE, "*/*");
+            }
+        });
+        fwRow.addView(btnFw);
+
+        Button btnFwHelp = createStyledButton("Info", "#21262D");
+        LinearLayout.LayoutParams f2 = new LinearLayout.LayoutParams(dp(54), ViewGroup.LayoutParams.WRAP_CONTENT);
+        btnFwHelp.setLayoutParams(f2);
+        btnFwHelp.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 showInfoDialog(
-                    "Game Asset Locations",
-                    "You can install game files using the buttons above or manually copy them using any Android file manager:\n\n"
-                    + "• RomFS Directory:\n" + getRomFsDir(MainActivity.this).getAbsolutePath() + "\n\n"
-                    + "• NSP Package File:\n" + getGamesDir(MainActivity.this).getAbsolutePath() + "/tomodachi.nsp"
+                    "Nintendo Switch Firmware",
+                    "Firmware provides system shared fonts (NintendoStandard.ttf), Mii rendering databases, and timezone archives.\n\n"
+                    + "• Status: The app already bundles built-in Nintendo-compatible fallback fonts and Mii data!\n"
+                    + "• Optional: If you have your console's Firmware 18.x.zip, tap 'Install (.zip)' to extract full official system archives."
                 );
             }
         });
-        gameBtnRow.addView(btnGameInfo);
-        gameCard.addView(gameBtnRow);
-        panelsRow.addView(gameCard);
+        fwRow.addView(btnFwHelp);
+        fwCard.addView(fwRow);
+        panelsRow.addView(fwCard);
 
         root.addView(panelsRow);
 
-        // 3. PROGRESS SECTION
+        // 4. PROGRESS BAR & STATUS LABEL
         mProgressLabel = new TextView(this);
-        mProgressLabel.setTextColor(Color.WHITE);
+        mProgressLabel.setTextColor(Color.parseColor("#58A6FF"));
         mProgressLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
         mProgressLabel.setVisibility(View.GONE);
-        mProgressLabel.setPadding(0, dp(4), 0, dp(2));
+        mProgressLabel.setPadding(0, dp(2), 0, dp(2));
         root.addView(mProgressLabel);
 
         mProgressBar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
-        mProgressBar.setIndeterminate(true);
+        mProgressBar.setIndeterminate(false);
         mProgressBar.setVisibility(View.GONE);
         root.addView(mProgressBar);
 
-        // 4. ACTION CONTROLS SECTION
+        // 5. ACTION BUTTONS ROW
         LinearLayout actionRow = new LinearLayout(this);
         actionRow.setOrientation(LinearLayout.HORIZONTAL);
-        actionRow.setPadding(0, dp(14), 0, 0);
+        actionRow.setPadding(0, dp(12), 0, 0);
 
-        // Primary Launch Button
-        mLaunchButton = createStyledButton("🚀 START TOMODACHI LIFE", "#2ECC71");
-        LinearLayout.LayoutParams launchParams = new LinearLayout.LayoutParams(0, dp(50), 1.5f);
-        launchParams.rightMargin = dp(8);
-        mLaunchButton.setLayoutParams(launchParams);
+        mLaunchButton = createStyledButton("▶ PLAY TOMODACHI LIFE", "#238636");
+        LinearLayout.LayoutParams launchP = new LinearLayout.LayoutParams(0, dp(50), 1.6f);
+        launchP.rightMargin = dp(8);
+        mLaunchButton.setLayoutParams(launchP);
         mLaunchButton.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
-        mLaunchButton.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        mLaunchButton.setTypeface(Typeface.create("sans-serif-black", Typeface.BOLD));
         mLaunchButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 if (checkKeysExist(MainActivity.this) && checkGameExists(MainActivity.this)) {
+                    playSound("game_start.wav");
                     launchGameEngine();
                 } else {
                     showMissingAssetsAlert();
@@ -316,30 +394,30 @@ public class MainActivity extends Activity {
         });
         actionRow.addView(mLaunchButton);
 
-        // Demo / Viewport & Controller Test Mode Button
-        mTestModeButton = createStyledButton("🎮 Viewport & Controls Test", "#8E44AD");
-        LinearLayout.LayoutParams testParams = new LinearLayout.LayoutParams(0, dp(50), 1.0f);
-        testParams.rightMargin = dp(8);
-        mTestModeButton.setLayoutParams(testParams);
-        mTestModeButton.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        mTestModeButton = createStyledButton("🎮 Viewport & Controller Test", "#8957E5");
+        LinearLayout.LayoutParams testP = new LinearLayout.LayoutParams(0, dp(50), 1.0f);
+        testP.rightMargin = dp(8);
+        mTestModeButton.setLayoutParams(testP);
+        mTestModeButton.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
         mTestModeButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                Toast.makeText(MainActivity.this, "Launching Vulkan Viewport & Virtual Touchpad Test...", Toast.LENGTH_SHORT).show();
+                playSound("switch_snap.wav");
+                Toast.makeText(MainActivity.this, "Testing 60 FPS Viewport & Virtual Joy-Cons...", Toast.LENGTH_SHORT).show();
                 launchGameEngine();
             }
         });
         actionRow.addView(mTestModeButton);
 
-        // Refresh Button
-        Button btnRefresh = createStyledButton("🔄 Refresh", "#34495E");
-        LinearLayout.LayoutParams refParams = new LinearLayout.LayoutParams(dp(100), dp(50));
-        btnRefresh.setLayoutParams(refParams);
+        Button btnRefresh = createStyledButton("🔄 Refresh", "#21262D");
+        LinearLayout.LayoutParams refP = new LinearLayout.LayoutParams(dp(90), dp(50));
+        btnRefresh.setLayoutParams(refP);
         btnRefresh.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                refreshAssetStatus();
-                Toast.makeText(MainActivity.this, "Asset status updated.", Toast.LENGTH_SHORT).show();
+                playSound("button_click.wav");
+                refreshAllStatus();
+                Toast.makeText(MainActivity.this, "Storage status re-scanned.", Toast.LENGTH_SHORT).show();
             }
         });
         actionRow.addView(btnRefresh);
@@ -350,48 +428,121 @@ public class MainActivity extends Activity {
         setContentView(scrollView);
     }
 
-    private void refreshAssetStatus() {
+    private LinearLayout createGameCard() {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.HORIZONTAL);
+        card.setPadding(dp(14), dp(10), dp(14), dp(10));
+        card.setBackground(createRoundedBackground("#161B22", "#30363D", 10));
+        card.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams cardParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        cardParams.topMargin = dp(8);
+        cardParams.bottomMargin = dp(4);
+        card.setLayoutParams(cardParams);
+
+        mGameIconView = new ImageView(this);
+        mGameIconView.setImageResource(android.R.drawable.sym_def_app_icon);
+        LinearLayout.LayoutParams iconP = new LinearLayout.LayoutParams(dp(54), dp(54));
+        iconP.rightMargin = dp(14);
+        mGameIconView.setLayoutParams(iconP);
+        card.addView(mGameIconView);
+
+        LinearLayout textCol = new LinearLayout(this);
+        textCol.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams textColP = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f);
+        textCol.setLayoutParams(textColP);
+
+        mGameTitleText = new TextView(this);
+        mGameTitleText.setText("Tomodachi Life: Living the Dream");
+        mGameTitleText.setTextColor(Color.parseColor("#F0F6FC"));
+        mGameTitleText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+        mGameTitleText.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        textCol.addView(mGameTitleText);
+
+        mGameMetaText = new TextView(this);
+        mGameMetaText.setText("Title ID: 0100D77011B8E000 • Version 1.0.0");
+        mGameMetaText.setTextColor(Color.parseColor("#8B949E"));
+        mGameMetaText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        mGameMetaText.setPadding(0, dp(2), 0, dp(2));
+        textCol.addView(mGameMetaText);
+
+        card.addView(textCol);
+
+        mGameBadgeText = new TextView(this);
+        mGameBadgeText.setText("Awaiting Game");
+        mGameBadgeText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        mGameBadgeText.setTextColor(Color.parseColor("#E3B341"));
+        mGameBadgeText.setPadding(dp(10), dp(4), dp(10), dp(4));
+        mGameBadgeText.setBackground(createRoundedBackground("#21262D", "#30363D", 6));
+        card.addView(mGameBadgeText);
+
+        return card;
+    }
+
+    private void refreshAllStatus() {
         boolean hasKeys = checkKeysExist(this);
+        boolean hasFw = checkFirmwareExist(this);
         boolean hasGame = checkGameExists(this);
 
         if (mKeysStatusText != null) {
             if (hasKeys) {
-                File keysFile = new File(getKeysDir(this), "prod.keys");
-                long kb = keysFile.length() / 1024;
-                mKeysStatusText.setText("✅ Installed: prod.keys (" + kb + " KB ready)");
-                mKeysStatusText.setTextColor(Color.parseColor("#2ECC71"));
+                File k = new File(getKeysDir(this), "prod.keys");
+                mKeysStatusText.setText("✅ prod.keys (" + (k.length() / 1024) + " KB ready)");
+                mKeysStatusText.setTextColor(Color.parseColor("#39D353"));
             } else {
-                mKeysStatusText.setText("❌ Missing: prod.keys (Required for decryption)");
-                mKeysStatusText.setTextColor(Color.parseColor("#E74C3C"));
+                mKeysStatusText.setText("❌ Missing prod.keys");
+                mKeysStatusText.setTextColor(Color.parseColor("#F85149"));
+            }
+        }
+
+        if (mFirmwareStatusText != null) {
+            if (hasFw) {
+                mFirmwareStatusText.setText("✅ Firmware Ready (Installed)");
+                mFirmwareStatusText.setTextColor(Color.parseColor("#39D353"));
+            } else {
+                mFirmwareStatusText.setText("ℹ️ Built-in Fonts & Assets");
+                mFirmwareStatusText.setTextColor(Color.parseColor("#58A6FF"));
             }
         }
 
         if (mGameStatusText != null) {
-            if (hasGame) {
-                File romfs = getRomFsDir(this);
-                File nsp = new File(getGamesDir(this), "tomodachi.nsp");
-                if (nsp.exists() && nsp.length() > 0) {
-                    long mb = nsp.length() / (1024 * 1024);
-                    mGameStatusText.setText("✅ Installed: tomodachi.nsp (" + mb + " MB ready)");
-                } else {
-                    mGameStatusText.setText("✅ Installed: RomFS asset directory ready");
-                }
-                mGameStatusText.setTextColor(Color.parseColor("#2ECC71"));
+            File gamesDir = getGamesDir(this);
+            File xci = new File(gamesDir, "tomodachi_game.xci");
+            File nsp = new File(gamesDir, "tomodachi_game.nsp");
+            File oldNsp = new File(gamesDir, "tomodachi.nsp");
+
+            if (xci.exists() && xci.length() > 0) {
+                long mb = xci.length() / (1024 * 1024);
+                mGameStatusText.setText("✅ XCI GameCard (" + mb + " MB mounted)");
+                mGameStatusText.setTextColor(Color.parseColor("#39D353"));
+                mGameBadgeText.setText("XCI MOUNTED");
+                mGameBadgeText.setTextColor(Color.parseColor("#39D353"));
+            } else if ((nsp.exists() && nsp.length() > 0) || (oldNsp.exists() && oldNsp.length() > 0)) {
+                long mb = (nsp.exists() ? nsp.length() : oldNsp.length()) / (1024 * 1024);
+                mGameStatusText.setText("✅ NSP Package (" + mb + " MB mounted)");
+                mGameStatusText.setTextColor(Color.parseColor("#39D353"));
+                mGameBadgeText.setText("NSP MOUNTED");
+                mGameBadgeText.setTextColor(Color.parseColor("#39D353"));
+            } else if (hasGame) {
+                mGameStatusText.setText("✅ RomFS Mounted");
+                mGameStatusText.setTextColor(Color.parseColor("#39D353"));
+                mGameBadgeText.setText("RomFS READY");
+                mGameBadgeText.setTextColor(Color.parseColor("#39D353"));
             } else {
-                mGameStatusText.setText("❌ Missing: Install .nsp or romfs directory");
-                mGameStatusText.setTextColor(Color.parseColor("#E74C3C"));
+                mGameStatusText.setText("❌ Missing .XCI / .NSP");
+                mGameStatusText.setTextColor(Color.parseColor("#F85149"));
+                mGameBadgeText.setText("NOT MOUNTED");
+                mGameBadgeText.setTextColor(Color.parseColor("#F85149"));
             }
         }
 
         if (mLaunchButton != null) {
             boolean ready = hasKeys && hasGame;
-            mLaunchButton.setEnabled(true); // Always clickable so it gives feedback
             if (ready) {
-                mLaunchButton.setText("🚀 START TOMODACHI LIFE");
-                mLaunchButton.setBackground(createRoundedBackground("#27AE60", "#2ECC71", 8));
+                mLaunchButton.setText("▶ PLAY TOMODACHI LIFE");
+                mLaunchButton.setBackground(createRoundedBackground("#238636", "#2EA043", 8));
             } else {
                 mLaunchButton.setText("⚠️ Complete Setup to Play");
-                mLaunchButton.setBackground(createRoundedBackground("#7F8C8D", "#95A5A6", 8));
+                mLaunchButton.setBackground(createRoundedBackground("#21262D", "#30363D", 8));
             }
         }
     }
@@ -403,20 +554,20 @@ public class MainActivity extends Activity {
 
     private void showMissingAssetsAlert() {
         new AlertDialog.Builder(this)
-            .setTitle("Asset Setup Incomplete")
+            .setTitle("Asset Setup Required")
             .setMessage(
-                "Tomodachi Life Recomp requires your dumped Nintendo Switch game files and decryption keys:\n\n"
-                + (!checkKeysExist(this) ? "• prod.keys is missing. Tap 'Select prod.keys' to import.\n" : "• prod.keys is ready.\n")
-                + (!checkGameExists(this) ? "• Game data is missing. Tap 'Import .nsp' or 'Import RomFS'.\n\n" : "• Game data is ready.\n\n")
-                + "Would you like to launch in Test Mode anyway to verify the Vulkan viewport and touch controls?"
+                "To run Tomodachi Life Recomp, the engine requires:\n\n"
+                + (!checkKeysExist(this) ? "• prod.keys (Missing) - Tap 'prod.keys' button to import.\n" : "• prod.keys (Ready)\n")
+                + (!checkGameExists(this) ? "• Game Dump (Missing) - Tap 'Install .XCI / .NSP' to import your game card or digital dump.\n\n" : "• Game Dump (Ready)\n\n")
+                + "Would you like to enter Viewport Test Mode to test the graphics pipeline and virtual gamepad?"
             )
-            .setPositiveButton("Launch Test Mode", new DialogInterface.OnClickListener() {
+            .setPositiveButton("Enter Test Mode", new DialogInterface.OnClickListener() {
                 @Override
                 public void onClick(DialogInterface dialog, int which) {
                     launchGameEngine();
                 }
             })
-            .setNegativeButton("Return to Setup", null)
+            .setNegativeButton("Back", null)
             .show();
     }
 
@@ -437,53 +588,161 @@ public class MainActivity extends Activity {
         super.onActivityResult(requestCode, resultCode, data);
         if (resultCode != RESULT_OK || data == null) return;
 
-        Uri uri = data.getData();
+        final Uri uri = data.getData();
         if (uri == null) return;
 
         if (requestCode == REQ_KEYS) {
-            importKeysAsync(uri);
-        } else if (requestCode == REQ_NSP) {
-            importNspAsync(uri);
-        } else if (requestCode == REQ_ROMFS) {
-            importRomfsAsync(uri);
+            importSimpleFileAsync(uri, new File(getKeysDir(this), "prod.keys"), "prod.keys");
+        } else if (requestCode == REQ_TITLE_KEYS) {
+            importSimpleFileAsync(uri, new File(getKeysDir(this), "title.keys"), "title.keys");
+        } else if (requestCode == REQ_GAME_PKG) {
+            processGamePackage(uri);
+        } else if (requestCode == REQ_FIRMWARE) {
+            processFirmwarePackage(uri);
+        } else if (requestCode == REQ_ROMFS_DIR) {
+            importRomfsFolderAsync(uri);
         }
     }
 
-    private void importKeysAsync(final Uri uri) {
-        showProgress("Importing prod.keys...");
+    private void processGamePackage(Uri uri) {
+        showProgress("Analyzing Switch container (XCI / NSP)...", 0);
+        SwitchPackageExtractor.processPackageAsync(this, uri, new SwitchPackageExtractor.ProgressCallback() {
+            @Override
+            public void onProgress(final String status, final int percent) {
+                mHandler.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (mProgressLabel != null) {
+                            mProgressLabel.setText(status + " (" + percent + "%)");
+                            mProgressLabel.setVisibility(View.VISIBLE);
+                        }
+                        if (mProgressBar != null) {
+                            mProgressBar.setIndeterminate(false);
+                            mProgressBar.setProgress(percent);
+                            mProgressBar.setVisibility(View.VISIBLE);
+                        }
+                    }
+                });
+            }
+
+            @Override
+            public void onSuccess(final SwitchPackageExtractor.GameInfo info) {
+                mHandler.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        playSound("switch_snap.wav");
+                        hideProgress();
+                        if (info.icon != null && mGameIconView != null) {
+                            mGameIconView.setImageBitmap(info.icon);
+                        }
+                        Toast.makeText(MainActivity.this, info.format + " extracted and mounted successfully!", Toast.LENGTH_LONG).show();
+                        refreshAllStatus();
+                    }
+                });
+            }
+
+            @Override
+            public void onError(final String error) {
+                mHandler.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        hideProgress();
+                        Toast.makeText(MainActivity.this, error, Toast.LENGTH_LONG).show();
+                        refreshAllStatus();
+                    }
+                });
+            }
+        });
+    }
+
+    private void processFirmwarePackage(Uri uri) {
+        showProgress("Installing Nintendo Switch Firmware...", 0);
+        SwitchPackageExtractor.installFirmwareAsync(this, uri, new SwitchPackageExtractor.ProgressCallback() {
+            @Override
+            public void onProgress(final String status, final int percent) {
+                mHandler.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (mProgressLabel != null) {
+                            mProgressLabel.setText(status);
+                            mProgressLabel.setVisibility(View.VISIBLE);
+                        }
+                        if (mProgressBar != null) {
+                            mProgressBar.setIndeterminate(true);
+                            mProgressBar.setVisibility(View.VISIBLE);
+                        }
+                    }
+                });
+            }
+
+            @Override
+            public void onSuccess(final SwitchPackageExtractor.GameInfo info) {
+                mHandler.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        playSound("switch_snap.wav");
+                        hideProgress();
+                        Toast.makeText(MainActivity.this, "Firmware installed (" + info.fileCount + " system archives)!", Toast.LENGTH_SHORT).show();
+                        refreshAllStatus();
+                    }
+                });
+            }
+
+            @Override
+            public void onError(final String error) {
+                mHandler.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        hideProgress();
+                        Toast.makeText(MainActivity.this, error, Toast.LENGTH_LONG).show();
+                        refreshAllStatus();
+                    }
+                });
+            }
+        });
+    }
+
+    private void importSimpleFileAsync(final Uri uri, final File destFile, final String label) {
+        showProgress("Importing " + label + "...", 0);
         new Thread(new Runnable() {
             @Override
             public void run() {
                 try {
-                    File dest = new File(getKeysDir(MainActivity.this), "prod.keys");
-                    copyStream(getContentResolver().openInputStream(uri), new FileOutputStream(dest));
-                    postSuccess("prod.keys imported successfully (" + (dest.length() / 1024) + " KB)!");
-                } catch (Exception e) {
-                    postError("Failed to import keys: " + e.getMessage());
+                    InputStream in = getContentResolver().openInputStream(uri);
+                    FileOutputStream out = new FileOutputStream(destFile);
+                    byte[] buffer = new byte[65536];
+                    int read;
+                    while ((read = in.read(buffer)) != -1) {
+                        out.write(buffer, 0, read);
+                    }
+                    in.close();
+                    out.flush();
+                    out.close();
+
+                    mHandler.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            playSound("switch_snap.wav");
+                            hideProgress();
+                            Toast.makeText(MainActivity.this, label + " imported (" + (destFile.length() / 1024) + " KB)!", Toast.LENGTH_SHORT).show();
+                            refreshAllStatus();
+                        }
+                    });
+                } catch (final Exception e) {
+                    mHandler.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            hideProgress();
+                            Toast.makeText(MainActivity.this, "Error importing " + label + ": " + e.getMessage(), Toast.LENGTH_LONG).show();
+                        }
+                    });
                 }
             }
         }).start();
     }
 
-    private void importNspAsync(final Uri uri) {
-        showProgress("Importing game .nsp package...");
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    File dest = new File(getGamesDir(MainActivity.this), "tomodachi.nsp");
-                    copyStream(getContentResolver().openInputStream(uri), new FileOutputStream(dest));
-                    long mb = dest.length() / (1024 * 1024);
-                    postSuccess("Game .nsp package imported (" + mb + " MB)!");
-                } catch (Exception e) {
-                    postError("Failed to import .nsp: " + e.getMessage());
-                }
-            }
-        }).start();
-    }
-
-    private void importRomfsAsync(final Uri treeUri) {
-        showProgress("Copying RomFS folder structure...");
+    private void importRomfsFolderAsync(final Uri treeUri) {
+        showProgress("Copying RomFS folder structure...", 0);
         new Thread(new Runnable() {
             @Override
             public void run() {
@@ -493,9 +752,23 @@ public class MainActivity extends Activity {
                     if (rootDir != null) {
                         copyDocTree(rootDir, targetRomfs);
                     }
-                    postSuccess("RomFS directory tree copied successfully!");
-                } catch (Exception e) {
-                    postError("Failed to copy romfs: " + e.getMessage());
+                    mHandler.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            playSound("switch_snap.wav");
+                            hideProgress();
+                            Toast.makeText(MainActivity.this, "RomFS directory tree imported successfully!", Toast.LENGTH_SHORT).show();
+                            refreshAllStatus();
+                        }
+                    });
+                } catch (final Exception e) {
+                    mHandler.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            hideProgress();
+                            Toast.makeText(MainActivity.this, "RomFS copy error: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                        }
+                    });
                 }
             }
         }).start();
@@ -510,24 +783,19 @@ public class MainActivity extends Activity {
                 File target = new File(destDir, file.getName());
                 InputStream in = getContentResolver().openInputStream(file.getUri());
                 OutputStream out = new FileOutputStream(target);
-                copyStream(in, out);
+                byte[] buf = new byte[65536];
+                int read;
+                while ((read = in.read(buf)) != -1) {
+                    out.write(buf, 0, read);
+                }
+                in.close();
+                out.flush();
+                out.close();
             }
         }
     }
 
-    private void copyStream(InputStream in, OutputStream out) throws Exception {
-        if (in == null || out == null) return;
-        byte[] buffer = new byte[65536];
-        int read;
-        while ((read = in.read(buffer)) != -1) {
-            out.write(buffer, 0, read);
-        }
-        in.close();
-        out.flush();
-        out.close();
-    }
-
-    private void showProgress(final String label) {
+    private void showProgress(final String label, final int percent) {
         mHandler.post(new Runnable() {
             @Override
             public void run() {
@@ -536,34 +804,17 @@ public class MainActivity extends Activity {
                     mProgressLabel.setVisibility(View.VISIBLE);
                 }
                 if (mProgressBar != null) {
+                    mProgressBar.setIndeterminate(percent <= 0);
+                    if (percent > 0) mProgressBar.setProgress(percent);
                     mProgressBar.setVisibility(View.VISIBLE);
                 }
             }
         });
     }
 
-    private void postSuccess(final String msg) {
-        mHandler.post(new Runnable() {
-            @Override
-            public void run() {
-                if (mProgressBar != null) mProgressBar.setVisibility(View.GONE);
-                if (mProgressLabel != null) mProgressLabel.setVisibility(View.GONE);
-                Toast.makeText(MainActivity.this, msg, Toast.LENGTH_SHORT).show();
-                refreshAssetStatus();
-            }
-        });
-    }
-
-    private void postError(final String error) {
-        mHandler.post(new Runnable() {
-            @Override
-            public void run() {
-                if (mProgressBar != null) mProgressBar.setVisibility(View.GONE);
-                if (mProgressLabel != null) mProgressLabel.setVisibility(View.GONE);
-                Toast.makeText(MainActivity.this, error, Toast.LENGTH_LONG).show();
-                refreshAssetStatus();
-            }
-        });
+    private void hideProgress() {
+        if (mProgressBar != null) mProgressBar.setVisibility(View.GONE);
+        if (mProgressLabel != null) mProgressLabel.setVisibility(View.GONE);
     }
 
     private String getSystemDiagnostics() {
@@ -581,20 +832,20 @@ public class MainActivity extends Activity {
             }
         }
 
-        String vkString = hasVulkan ? ("Vulkan Supported (v" + (vkVer >> 22) + "." + ((vkVer >> 12) & 0x3ff) + ")") : "Vulkan Fallback (EGL/GLES3)";
-        return "ABI: " + abi + "  •  Graphics: " + vkString + "  •  Android " + Build.VERSION.RELEASE;
+        String vkString = hasVulkan ? ("Vulkan 1." + ((vkVer >> 12) & 0x3ff) + " Active") : "OpenGL ES 3.0 Fallback";
+        return "ABI: " + abi + "  •  " + vkString + "  •  Android " + Build.VERSION.RELEASE;
     }
 
     private LinearLayout createPanelCard(String headerTitle) {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(dp(14), dp(12), dp(14), dp(12));
-        card.setBackground(createRoundedBackground("#161E2E", "#27384E", 10));
+        card.setPadding(dp(12), dp(10), dp(12), dp(10));
+        card.setBackground(createRoundedBackground("#161B22", "#30363D", 8));
 
         TextView label = new TextView(this);
         label.setText(headerTitle);
         label.setTextColor(Color.parseColor("#F0F6FC"));
-        label.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        label.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
         label.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
         label.setPadding(0, 0, 0, dp(4));
         card.addView(label);
@@ -606,8 +857,8 @@ public class MainActivity extends Activity {
         Button btn = new Button(this);
         btn.setText(text);
         btn.setTextColor(Color.WHITE);
-        btn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
-        btn.setBackground(createRoundedBackground(colorHex, lightenColor(colorHex), 8));
+        btn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        btn.setBackground(createRoundedBackground(colorHex, colorHex, 6));
         return btn;
     }
 
@@ -617,10 +868,6 @@ public class MainActivity extends Activity {
         gd.setStroke(dp(1), Color.parseColor(strokeColor));
         gd.setCornerRadius(dp(radiusDp));
         return gd;
-    }
-
-    private String lightenColor(String hex) {
-        return hex;
     }
 
     private void showInfoDialog(String title, String message) {
@@ -633,5 +880,14 @@ public class MainActivity extends Activity {
 
     private int dp(int value) {
         return (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, value, getResources().getDisplayMetrics());
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (mMediaPlayer != null) {
+            mMediaPlayer.release();
+            mMediaPlayer = null;
+        }
+        super.onDestroy();
     }
 }
