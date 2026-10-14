@@ -29,7 +29,14 @@ public:
     // Verify whether game assets (RomFS, ExeFS) are provisioned
     bool VerifyAssets(std::string& outMissingPath);
 
-    // Show native Android modal dialog via JNI when assets are missing
+    // Show interactive on-device installer UI to pick prod.keys and NSP/RomFS
+    void ShowInstallerInterface();
+
+    // Check presence of keys and game files
+    bool HasProdKeys() const;
+    bool HasGameData() const;
+
+    // Show native Android modal dialog via JNI
     void ShowFatalAssetDialog(const std::string& targetPath);
     void ShowFatalDialog(const std::string& title, const std::string& message);
 

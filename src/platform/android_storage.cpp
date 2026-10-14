@@ -215,4 +215,65 @@ void AndroidStorage::ShowFatalDialog(const std::string& title, const std::string
     vm->DetachCurrentThread();
 }
 
+bool AndroidStorage::HasProdKeys() const {
+    std::string keysFile = m_paths.internal_data_dir + "/keys/prod.keys";
+    struct stat st;
+    return (stat(keysFile.c_str(), &st) == 0 && st.st_size > 0);
+}
+
+bool AndroidStorage::HasGameData() const {
+    if (DirectoryExists(m_paths.romfs_dir)) {
+        DIR* dir = opendir(m_paths.romfs_dir.c_str());
+        if (dir) {
+            struct dirent* entry = nullptr;
+            while ((entry = readdir(dir)) != nullptr) {
+                if (strcmp(entry->d_name, ".") != 0 && strcmp(entry->d_name, "..") != 0) {
+                    closedir(dir);
+                    return true;
+                }
+            }
+            closedir(dir);
+        }
+    }
+    std::string nspFile = m_paths.internal_data_dir + "/games/tomodachi.nsp";
+    struct stat st;
+    return (stat(nspFile.c_str(), &st) == 0 && st.st_size > 0);
+}
+
+void AndroidStorage::ShowInstallerInterface() {
+    if (!m_app || !m_app->activity || !m_app->activity->vm) {
+        LOGE("Cannot show installer interface: JNI environment unavailable.");
+        return;
+    }
+
+    JavaVM* vm = m_app->activity->vm;
+    JNIEnv* env = nullptr;
+    jint res = vm->AttachCurrentThread(&env, nullptr);
+    if (res != JNI_OK || !env) {
+        LOGE("Failed to attach JNI thread for installer interface.");
+        return;
+    }
+
+    jclass activityClass = env->FindClass("com/recomp/tomodachiltd/TomodachiActivity");
+    if (activityClass) {
+        jmethodID showInstaller = env->GetStaticMethodID(activityClass, "showInstallerInterface", "()V");
+        if (showInstaller) {
+            env->CallStaticVoidMethod(activityClass, showInstaller);
+        }
+        env->DeleteLocalRef(activityClass);
+    }
+
+    if (env->ExceptionCheck()) {
+        env->ExceptionDescribe();
+        env->ExceptionClear();
+    }
+
+    vm->DetachCurrentThread();
+}
+
 } // namespace Tomodachi::Platform
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_recomp_tomodachiltd_TomodachiActivity_nativeOnAssetsProvisioned(JNIEnv* env, jclass clazz) {
+    __android_log_print(ANDROID_LOG_INFO, "TomodachiStorage", "User confirmed asset provisioning in installer UI.");
+}

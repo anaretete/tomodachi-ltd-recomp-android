@@ -225,15 +225,16 @@ void android_main(struct android_app* app) {
     // 1. Initialize Storage Virtualization & Redirect Desktop Paths
     Tomodachi::Platform::AndroidStorage::Instance().Initialize(app);
 
-    // 2. Perform Asset Verification Check
+    // 2. Perform Asset & Keys Verification Check
     std::string missingPath;
     ctx.assets_verified = Tomodachi::Platform::AndroidStorage::Instance().VerifyAssets(missingPath);
+    bool keys_ok = Tomodachi::Platform::AndroidStorage::Instance().HasProdKeys();
 
-    if (!ctx.assets_verified) {
-        LOGW("Assets missing or incomplete. Presenting user notification dialog.");
-        Tomodachi::Platform::AndroidStorage::Instance().ShowFatalAssetDialog(missingPath);
+    if (!ctx.assets_verified || !keys_ok) {
+        LOGI("Game files or keys missing. Launching interactive on-device installer UI.");
+        Tomodachi::Platform::AndroidStorage::Instance().ShowInstallerInterface();
     } else {
-        LOGI("Game assets verified at: %s", 
+        LOGI("Game assets and keys verified at: %s", 
              Tomodachi::Platform::AndroidStorage::Instance().GetRomFsPath().c_str());
     }
 

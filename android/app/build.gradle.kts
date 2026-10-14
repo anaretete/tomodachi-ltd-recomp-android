@@ -87,5 +87,5 @@ android {
 }
 
 dependencies {
-    // Pure NativeActivity APK - Zero heavyweight JVM dependencies required
+    implementation("androidx.documentfile:documentfile:1.0.1")
 }
