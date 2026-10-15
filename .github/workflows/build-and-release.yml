@@ -102,17 +102,17 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event_name == 'workflow_dispatch'
         with:
-          tag_name: v1.0.0
+          tag_name: v1.0.2
           name: "Tomodachi Life Recomp Android v1.0.2"
           body: |
             ### Native Android Port for Tomodachi Life Recomp (Multi-Architecture v1.0.2)
             
             **Available APK Downloads:**
-            - **`tomodachi-ltd-recomp-universal.apk`**: All-in-one APK supporting ARM64, ARM32, x86_64, and x86 devices and emulators. (Recommended)
-            - **`tomodachi-ltd-recomp-arm64-v8a.apk`**: Optimized for modern 64-bit ARM smartphones and tablets.
-            - **`tomodachi-ltd-recomp-x86_64.apk`**: Optimized for PC Android emulators (BlueStacks, LDPlayer, Android Studio, WSA) and Chromebooks.
-            - **`tomodachi-ltd-recomp-armeabi-v7a.apk`**: For 32-bit ARM Android devices.
-            - **`tomodachi-ltd-recomp-x86.apk`**: For 32-bit x86 emulators.
+            - [**`tomodachi-ltd-recomp-universal.apk`**](https://github.com/anaretete/tomodachi-ltd-recomp-android/releases/download/v1.0.2/tomodachi-ltd-recomp-universal.apk) (3.67 MB): All-in-one APK supporting ARM64, ARM32, x86_64, and x86 devices and emulators. (Recommended)
+            - [**`tomodachi-ltd-recomp-arm64-v8a.apk`**](https://github.com/anaretete/tomodachi-ltd-recomp-android/releases/download/v1.0.2/tomodachi-ltd-recomp-arm64-v8a.apk) (3.27 MB): Optimized for modern 64-bit ARM smartphones and tablets.
+            - [**`tomodachi-ltd-recomp-x86_64.apk`**](https://github.com/anaretete/tomodachi-ltd-recomp-android/releases/download/v1.0.2/tomodachi-ltd-recomp-x86_64.apk) (3.27 MB): Optimized for PC Android emulators (BlueStacks, LDPlayer, Android Studio, WSA) and Chromebooks.
+            - [**`tomodachi-ltd-recomp-armeabi-v7a.apk`**](https://github.com/anaretete/tomodachi-ltd-recomp-android/releases/download/v1.0.2/tomodachi-ltd-recomp-armeabi-v7a.apk) (3.25 MB): For 32-bit ARM Android devices.
+            - [**`tomodachi-ltd-recomp-x86.apk`**](https://github.com/anaretete/tomodachi-ltd-recomp-android/releases/download/v1.0.2/tomodachi-ltd-recomp-x86.apk) (3.28 MB): For 32-bit x86 emulators.
             
             **✨ What's New in v1.0.2:**
             - **Full `.XCI` & `.NSP` Container Support**: Integrated native container parser that reads HFS0 and PFS0 partition tables, extracts NCAs, and automatically mounts RomFS without manual PC extraction.
