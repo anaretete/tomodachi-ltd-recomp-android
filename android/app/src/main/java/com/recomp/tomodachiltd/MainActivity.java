@@ -821,6 +821,17 @@ public class MainActivity extends Activity {
         String abi = (Build.SUPPORTED_ABIS != null && Build.SUPPORTED_ABIS.length > 0)
             ? Build.SUPPORTED_ABIS[0] : "arm64-v8a";
 
+        // Detect Google Tensor SoC family (Pixel 6/7/8/9)
+        String socModel = "";
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            socModel = Build.SOC_MODEL != null ? Build.SOC_MODEL : "";
+        }
+        String hardware = Build.HARDWARE != null ? Build.HARDWARE.toLowerCase() : "";
+        String model = Build.MODEL != null ? Build.MODEL : "";
+        boolean isTensor = hardware.contains("tensor") || hardware.contains("gs101") ||
+                           hardware.contains("gs201") || hardware.contains("zuma") ||
+                           socModel.toLowerCase().contains("tensor") || model.contains("Pixel");
+
         boolean hasVulkan = getPackageManager().hasSystemFeature(PackageManager.FEATURE_VULKAN_HARDWARE_VERSION);
         int vkVer = 0;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -832,8 +843,9 @@ public class MainActivity extends Activity {
             }
         }
 
-        String vkString = hasVulkan ? ("Vulkan 1." + ((vkVer >> 12) & 0x3ff) + " Active") : "OpenGL ES 3.0 Fallback";
-        return "ABI: " + abi + "  •  " + vkString + "  •  Android " + Build.VERSION.RELEASE;
+        String cpuTag = isTensor ? "Google Tensor (16KB Align)" : ("ABI: " + abi);
+        String vkString = hasVulkan ? ("Vulkan 1." + ((vkVer >> 12) & 0x3ff) + " Active") : "OpenGL ES 3.0 (PowerVR / EGL)";
+        return cpuTag + "  •  " + vkString + "  •  Android " + Build.VERSION.RELEASE;
     }
 
     private LinearLayout createPanelCard(String headerTitle) {

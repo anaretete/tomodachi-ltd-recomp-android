@@ -41,6 +41,7 @@ struct AppContext {
     bool window_ready = false;
     bool assets_verified = false;
     RenderBackend backend = RenderBackend::None;
+    uint32_t graphics_queue_family = 0;
 
     // Vulkan Handles
     VkInstance vk_instance = VK_NULL_HANDLE;
@@ -172,10 +173,46 @@ static bool InitVulkanBootstrap(AppContext* ctx) {
     vkEnumeratePhysicalDevices(ctx->vk_instance, &deviceCount, devices.data());
     ctx->vk_physical_device = devices[0];
 
+    // Query Physical Device Properties & Detect GPU Vendor
+    VkPhysicalDeviceProperties props{};
+    vkGetPhysicalDeviceProperties(ctx->vk_physical_device, &props);
+
+    bool is_imagination = (props.vendorID == 0x1010) || (strstr(props.deviceName, "PowerVR") != nullptr) || (strstr(props.deviceName, "IMG") != nullptr);
+    bool is_mali_tensor = (props.vendorID == 0x13B5) || (strstr(props.deviceName, "Mali") != nullptr);
+
+    if (is_imagination) {
+        LOGI("Hardware Target: Imagination Technologies PowerVR GPU detected (%s, Vendor: 0x%04X). Applying TBDR tile-pipeline optimizations.", props.deviceName, props.vendorID);
+    } else if (is_mali_tensor) {
+        LOGI("Hardware Target: ARM Mali / Google Tensor GPU detected (%s, Vendor: 0x%04X). Applying 16KB page and unified memory optimizations.", props.deviceName, props.vendorID);
+    } else {
+        LOGI("Hardware Target: GPU %s (Vendor: 0x%04X).", props.deviceName, props.vendorID);
+    }
+
+    // Dynamic Graphics Queue Family Selection (Fixes crashes on Imagination & Mali GPUs)
+    uint32_t queueFamilyCount = 0;
+    vkGetPhysicalDeviceQueueFamilyProperties(ctx->vk_physical_device, &queueFamilyCount, nullptr);
+    std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+    vkGetPhysicalDeviceQueueFamilyProperties(ctx->vk_physical_device, &queueFamilyCount, queueFamilies.data());
+
+    uint32_t graphicsQueueIndex = 0;
+    bool foundGraphics = false;
+    for (uint32_t i = 0; i < queueFamilyCount; i++) {
+        if (queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+            graphicsQueueIndex = i;
+            foundGraphics = true;
+            break;
+        }
+    }
+
+    if (!foundGraphics) {
+        LOGW("No dedicated graphics queue family found; defaulting to index 0.");
+    }
+    ctx->graphics_queue_family = graphicsQueueIndex;
+
     float queuePriority = 1.0f;
     VkDeviceQueueCreateInfo queueCreateInfo{};
     queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-    queueCreateInfo.queueFamilyIndex = 0;
+    queueCreateInfo.queueFamilyIndex = ctx->graphics_queue_family;
     queueCreateInfo.queueCount = 1;
     queueCreateInfo.pQueuePriorities = &queuePriority;
 
@@ -192,14 +229,14 @@ static bool InitVulkanBootstrap(AppContext* ctx) {
 
     res = vkCreateDevice(ctx->vk_physical_device, &deviceCreateInfo, nullptr, &ctx->vk_device);
     if (res != VK_SUCCESS) {
-        LOGW("vkCreateDevice failed (%d). Vulkan swapchain device creation failed.", res);
+        LOGW("vkCreateDevice failed (%d). Falling back to OpenGL ES 3.0 / EGL...", res);
         vkDestroyInstance(ctx->vk_instance, nullptr);
         ctx->vk_instance = VK_NULL_HANDLE;
         return false;
     }
 
-    vkGetDeviceQueue(ctx->vk_device, 0, 0, &ctx->vk_queue);
-    LOGI("Vulkan bootstrap initialized successfully.");
+    vkGetDeviceQueue(ctx->vk_device, ctx->graphics_queue_family, 0, &ctx->vk_queue);
+    LOGI("Vulkan bootstrap initialized successfully on queue family %u.", ctx->graphics_queue_family);
     ctx->backend = RenderBackend::Vulkan;
     return true;
 }

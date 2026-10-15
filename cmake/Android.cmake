@@ -11,11 +11,14 @@ message(STATUS "Configuring tomodachi-ltd-recomp for Android (ABI: ${ANDROID_ABI
 
 # Architecture specific optimization flags
 if(ANDROID_ABI STREQUAL "arm64-v8a")
-    add_compile_options(-march=armv8-a+crypto+crc)
+    # Target ARMv8.2-A with runtime LSE atomic dispatch for Google Tensor (Pixel 6/7/8/9)
+    add_compile_options(-march=armv8.2-a+crypto+crc -moutline-atomics)
+    add_link_options(-Wl,-z,max-page-size=16384)
 elseif(ANDROID_ABI STREQUAL "armeabi-v7a")
     add_compile_options(-march=armv7-a -mfloat-abi=softfp -mfpu=neon)
 elseif(ANDROID_ABI STREQUAL "x86_64")
     add_compile_options(-march=x86-64 -msse4.2 -mpopcnt)
+    add_link_options(-Wl,-z,max-page-size=16384)
 elseif(ANDROID_ABI STREQUAL "x86")
     add_compile_options(-march=i686 -msse3)
 endif()
